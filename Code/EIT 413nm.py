@@ -38,7 +38,7 @@ ri = istate*rstate.dag() # excited to intermediate
 Ip = 20e-6
 Ic = 5
 dri = np.sqrt((3*1e-4*hbar*413e-9*e**2)/(4*np.pi*m_e*c))
-dig = np.sqrt((3*1.9*hbar*461e-9*e**2)/(4*np.pi*m_e*c))
+dig = np.sqrt((3*1.91*hbar*461e-9*e**2)/(4*np.pi*m_e*c))
 gri = 4e4
 gig = 2*np.pi*32e6
 Oc = np.sqrt((2*Ic*1e4*dri**2)/(c*epsilon_0*hbar**2))
@@ -50,7 +50,7 @@ lwp = 1e6
 """defining hamiltonian"""
 
 def Hamiltonian(delta_p, delta_c, Omega_p, Omega_c):
-    return (-delta_p*(ii + rr) - delta_c*(rr) - Omega_p*(gi + ig)/2 - Omega_c*(ir+ri)/2)
+    return (-delta_p*(ii + rr) - delta_c*(rr) + Omega_p*(gi + ig)/2 + Omega_c*(ir+ri)/2)
 
 """defining collapse operators"""
 def J_ri(gamma_ri):
@@ -164,7 +164,7 @@ def trans_plot(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin=-60
     dlist, tlist = tcalc(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin, dmax, steps)
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    plt.title(r"Probe transmission against probe beam detuning, $\bar{v_z}$ = 3 m/s, $\sigma$ = 2 m/s")
+    plt.title(r"Probe transmission against probe beam detuning")
     ax.plot(dlist/gig, tlist, color="orange", label="$\Omega_c=$" f"{Omega_c/1e6:.1f} $MHz$" "\n" "$\Omega_p=$" f"{Omega_p/1e6:.1f} $MHz$" "\n" "$\Gamma_{ri}$" f"= {gri/1e6:.2f} $MHz$" "\n" "$\Delta_c =$" f"{delta_c/1e6:.1f} $MHz$" "\n" "$\Gamma_{ig} =$" f"{gig/1e6:.1f} $MHz$" "\n" f"$\gamma_p$ = {lwp/1e6:.1f} MHz" "\n" f"$\gamma_c$ = {lwc/1e6:.1f} MHz")
     ax.set_xlabel(r"$\Delta_p/\Gamma_{ig}$")
     ax.set_ylabel(r"Probe Transmission")
