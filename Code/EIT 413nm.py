@@ -46,6 +46,9 @@ Op = np.sqrt((2*Ip*1e4*dig**2)/(c*epsilon_0*hbar**2))
 density = 1e15
 lwc = 1e6
 lwp = 1e6
+kp = 2*np.pi/461e-9
+kc = 2*np.pi/413e-9
+
 
 """defining hamiltonian"""
 
@@ -85,53 +88,54 @@ def population(delta_p, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc)
 def t(density, delta_p, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc):
     p = population(delta_p, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc)[1,0]
     chi = (-2*density*dig**2*p)/(hbar*epsilon_0*Omega_p)
-    a = 2*np.pi*np.abs(chi.imag)/461e-9
+    a = kp*np.abs(chi.imag)
     return np.exp(-a*1e-3)
 
-def tgauss(density, delta_p, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, mu, sig):
-    kp = 2*np.pi/461e-9
-    kc = 2*np.pi/413e-9
-    dplist = []
-    dclist = []
-    chilist = []
-    x = np.linspace(-(mu+4*sig), mu+4*sig, 100)
-    for i in x:
-        dplist.append(delta_p-kp*i)
-        dclist.append(delta_c+kc*i)
-    normpdf = norm(mu, sig).pdf(x)
+def tgauss(density, delta_p, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, x):
+    chilist = np.empty(len(x), dtype = complex)
     for i in range(len(x)):
-        p = population(dplist[i], dclist[i], Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc)[1,0]
+        detuning = delta_p-kp*x[i]
+        p = population(detuning, dclist[i], Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc)[1,0]
         chi = (-2*density*dig**2*p)/(hbar*epsilon_0*Omega_p)
-        chilist.append(chi)
-    chilist = np.array(chilist)
+        chilist[i] = chi
     i = chilist*normpdf
     chiavg = trapz(i, x)
-    a = 2*np.pi*np.abs(chiavg.imag)/461e-9
+    a = kp*np.abs(chiavg.imag)
     return np.exp(-a*1e-3)
 
 def tcalc(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin=-600e6, dmax=600e6, steps=1000):
-    tlist = []
-    dlist = []
+    tlist = np.empty(steps+1)
+    dlist = np.empty(steps+1)
     c = 0
     d=(dmax-dmin)*(steps)**(-1)
     gauss = input("Do you want to include a velocity distribution? \nY/N \n")
     if gauss == "Y":
         musig = input("Input mean and standard deviation transverse velocity \nmu, sig \n")
         musig = musig.split(",")
+        mu = float(musig[0])
+        sig = float(musig[1])
+        x = np.linspace(-(mu+4*sig), mu+4*sig, 100)
+        global normpdf
+        normpdf = norm(mu, sig).pdf(x)
+        global dclist
+        dclist = np.empty(len(x))
+        for i in range(len(x)):
+            dclist[i] = delta_c+kc*x[i]
         for i in range(0, steps+1):
             print(c)
-            dlist.append(dmin)
-            tlist.append(tgauss(density, dmin, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, float(musig[0]), float(musig[1])))
+            dlist[i] = dmin
+            tlist[i] = tgauss(density, dmin, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, x)
             dmin+=d
             c+=1
     else:
         for i in range(0, steps+1):
-            dlist.append(dmin)
-            tlist.append(t(density, dmin, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc))
+            dlist[i] = dmin
+            tlist[i] = t(density, dmin, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc)
             dmin+=d
-    dlist = np.array(dlist)
-    tlist = np.array(tlist)
     return dlist, tlist
+
+def tgausstt():
+    pass
 
 def pop_plot(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin=-600e6, dmax=600e6, steps=1000):
     state = input("Which state do you want to plot? \nGround, Intermediate, Rydberg \n")
