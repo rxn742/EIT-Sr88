@@ -17,7 +17,8 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 import itertools
 from scipy.integrate import trapz
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, peak_widths
+from shapely.geometry import LineString
 
 """defining the states"""
 gstate = qt.basis(3,0) # ground state
@@ -35,14 +36,17 @@ ig = gstate*istate.dag() # intermediate to ground
 ir = rstate*istate.dag() # intermediate to excited
 ri = istate*rstate.dag() # excited to intermediate
 
-Ip = 20e-6
-Ic = 5
-dri = np.sqrt((3*1e-4*hbar*413e-9*e**2)/(4*np.pi*m_e*c))
+pp = 1e-6
+cp = 250e-3
+d = 4e-3
+Ip = pp/(np.pi*(d/2)**2)
+Ic = cp/(np.pi*(d/2)**2)
+dri = np.sqrt((3*1.6e-4*hbar*413.3e-9*e**2)/(4*np.pi*m_e*c))
 dig = np.sqrt((3*1.91*hbar*461e-9*e**2)/(4*np.pi*m_e*c))
 gri = 4e4
 gig = 2*np.pi*32e6
-Oc = np.sqrt((2*Ic*1e4*dri**2)/(c*epsilon_0*hbar**2))
-Op = np.sqrt((2*Ip*1e4*dig**2)/(c*epsilon_0*hbar**2))
+Oc = (dri/hbar)*np.sqrt((2*Ic)/(c*epsilon_0*1.0003))
+Op = (dig/hbar)*np.sqrt((2*Ip)/(c*epsilon_0*1.0003))
 density = 1e15
 lwc = 1e6
 lwp = 1e6
@@ -89,7 +93,7 @@ def t(density, delta_p, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc)
     p = population(delta_p, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc)[1,0]
     chi = (-2*density*dig**2*p)/(hbar*epsilon_0*Omega_p)
     a = kp*np.abs(chi.imag)
-    return np.exp(-a*1e-3)
+    return np.exp(-a*3e-3)
 
 def tgauss(density, delta_p, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, x):
     chilist = np.empty(len(x), dtype = complex)
@@ -101,7 +105,7 @@ def tgauss(density, delta_p, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp,
     i = chilist*normpdf
     chiavg = trapz(i, x)
     a = kp*np.abs(chiavg.imag)
-    return np.exp(-a*1e-3)
+    return np.exp(-a*3e-3)
 
 def tcalc(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin=-600e6, dmax=600e6, steps=1000):
     tlist = np.empty(steps+1)
@@ -134,9 +138,6 @@ def tcalc(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin=-600e6, 
             dmin+=d
     return dlist, tlist
 
-def tgausstt():
-    pass
-
 def pop_plot(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin=-600e6, dmax=600e6, steps=1000):
     state = input("Which state do you want to plot? \nGround, Intermediate, Rydberg \n")
     if state == "Ground":
@@ -158,7 +159,10 @@ def pop_plot(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin=-600e
     fig = plt.figure()
     ax = fig.add_subplot(111)
     plt.title(f"{state} population")
-    ax.plot(dlist/gig, ilist, color="orange", label="$\Omega_c=$" f"{Omega_c/1e6:.1f} $MHz$" "\n" "$\Omega_p=$" f"{Omega_p/1e6:.1f} $MHz$" "\n" "$\Gamma_{ri}$" f"= {gri/1e6:.2f} $MHz$" "\n" "$\Delta_c =$" f"{delta_c/1e6:.1f} $MHz$" "\n" "$\Gamma_{ig} =$" f"{gig/1e6:.1f} $MHz$" "\n" f"$\gamma_p$ = {lwp/1e6:.1f} MHz" "\n" f"$\gamma_c$ = {lwc/1e6:.1f} MHz")
+    ax.plot(dlist/gig, ilist, color="orange", label="$\Omega_c=$" f"{Omega_c/1e6:.1f} $MHz$" "\n" \
+            "$\Omega_p=$" f"{Omega_p/1e6:.1f} $MHz$" "\n" "$\Gamma_{ri}$" f"= {gri/1e6:.2f} $MHz$" "\n"\
+                "$\Delta_c =$" f"{delta_c/1e6:.1f} $MHz$" "\n" "$\Gamma_{ig} =$" f"{gig/1e6:.1f} $MHz$" "\n"\
+                    f"$\gamma_p$ = {lwp/1e6:.1f} MHz" "\n" f"$\gamma_c$ = {lwc/1e6:.1f} MHz")
     ax.set_xlabel(r"$\Delta_p/\Gamma_{ig}$")
     ax.set_ylabel(f"{state} state popultaion")
     ax.legend()
@@ -166,12 +170,22 @@ def pop_plot(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin=-600e
     
 def trans_plot(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin=-600e6, dmax=600e6, steps=1000):
     dlist, tlist = tcalc(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin, dmax, steps)
+    F = FWHM(tlist)
+    first_line = LineString(np.column_stack((dlist/1e6, np.full(len(tlist), F[0]))))
+    second_line = LineString(np.column_stack((dlist/1e6, tlist)))
+    intersection = first_line.intersection(second_line)
+    peak_width = ((np.abs(intersection[1].x) - np.abs(intersection[2].x)))
     fig = plt.figure()
     ax = fig.add_subplot(111)
     plt.title(r"Probe transmission against probe beam detuning")
-    ax.plot(dlist/gig, tlist, color="orange", label="$\Omega_c=$" f"{Omega_c/1e6:.1f} $MHz$" "\n" "$\Omega_p=$" f"{Omega_p/1e6:.1f} $MHz$" "\n" "$\Gamma_{ri}$" f"= {gri/1e6:.2f} $MHz$" "\n" "$\Delta_c =$" f"{delta_c/1e6:.1f} $MHz$" "\n" "$\Gamma_{ig} =$" f"{gig/1e6:.1f} $MHz$" "\n" f"$\gamma_p$ = {lwp/1e6:.1f} MHz" "\n" f"$\gamma_c$ = {lwc/1e6:.1f} MHz")
-    ax.set_xlabel(r"$\Delta_p/\Gamma_{ig}$")
+    ax.plot(dlist/1e6, tlist, color="orange", label="$\Omega_c=$" f"{Omega_c/1e6:.1f} $MHz$"\
+            "\n" "$\Omega_p=$" f"{Omega_p/1e6:.1f} $MHz$" "\n" "$\Gamma_{ri}$" f"= {gri/(1e3*2*np.pi):.2f} $KHz$" "\n" "$\Gamma_{ig}$" f"= {gig/(1e6*2*np.pi):.2f} $MHz$" "\n" "$A_{r}$" f" = {gri/1e4:.2f}"\
+                r" x $10^4s^{-1}$" "\n""$A_{i} =$"\
+                    f"{gig/1e6:.1f}" r" x $10^6s^{-1}$" "\n" "$\Delta_c =$" f"{delta_c/1e6:.1f} $MHz$" "\n" f"$\gamma_p$ = {lwp/1e6:.1f} $MHz$" "\n"\
+                        f"$\gamma_c$ = {lwc/1e6:.1f} $MHz$" "\n" f"Probe power = {pp*1e6:.1f} $\mu W$" "\n" f"Coupling power = {cp*1e3:.1f} $mW$")
+    ax.set_xlabel(r"$\Delta_p$ / $MHz$")
     ax.set_ylabel(r"Probe Transmission")
+    ax.text(0.4, 0.65, f"EIT peak FWHM = {peak_width:.2f} $MHz$", transform=ax.transAxes, fontsize=10, verticalalignment='top')
     ax.legend()
     plt.show()
     
@@ -237,4 +251,8 @@ def optimize2D(delta_c, gamma_ri, gamma_ig, lwp, lwc, points=1000):
     ax.set_zlabel("Rydberg state population")
     plt.show()
     
-    
+def FWHM(t):
+    peak = find_peaks(t)[0]
+    width = peak_widths(t, peak)
+    height = width[1]
+    return height
