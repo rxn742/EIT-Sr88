@@ -185,6 +185,33 @@ def population(delta_p, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc)
     return rho
 
 def popgauss(delta_p, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, vlist):
+    """
+    This function generates the population probability for a given probe detuning with Doppler broadening
+    Parameters
+    ----------
+elta_c : float
+        Coupling detuning in Hz.
+    Omega_p : float
+        Probe Rabi frequency in Hz.
+    Omega_c : float
+        Coupling Rabi frequency in Hz.
+    gamma_ri : float
+        r-i spontaneous emission rate.
+    gamma_ig : float
+        i-g spontaneous emission rate.
+    lwp : float
+        Probe beam linewidth in Hz
+    lwc : float
+        Coupling beam linewidth in Hz
+    vlist : numpy.ndarray, dtype = float
+        A list of cross beam velocity groups 
+
+    Returns
+    -------
+    pop : float
+        State population probability for a given detuning
+
+    """
     poplist = np.empty(len(vlist), dtype = complex) # list for chi values for each velocity group
     for i in range(len(vlist)):
         detuning = delta_p-kp*vlist[i]
@@ -192,7 +219,7 @@ def popgauss(delta_p, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, v
         poplist[i] = p
     i = poplist*normpdfP
     pop = trapz(i, vlist)
-    return pop
+    return np.abs(pop)
 
 def popcalc(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin, dmax, steps):
     """
@@ -218,14 +245,14 @@ def popcalc(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin, dmax,
     dmax : float
         Upper bound of Probe detuning in MHz
     steps : int
-        Number of Probe detunings to calculate the transmission at 
+        Number of Probe detunings to calculate the population probability
 
     Returns
     -------
     dlist : numpy.ndarray, dtype = float64
         Array of Probe detunings
-    tlist : numpy.ndarray, dtype = float64
-        Array of transmission values corresponding to the detunings
+    plist : numpy.ndarray, dtype = float64
+        Array of population probabilities corresponding to the detunings
 
     """
     global normpdfP # global variable for the gaussian distribution of velocity
@@ -283,7 +310,7 @@ def pop_plot(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin=-500e
     dmax : float
         Upper bound of Probe detuning in MHz
     steps : int
-        Number of Probe detunings to calculate the transmission at 
+        Number of Probe detunings to calculate the population probabilities 
 
     Returns
     -------
