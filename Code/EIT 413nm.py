@@ -519,11 +519,21 @@ def trans_plot(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin=-50
     """
     dlist, tlist = tcalc(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin, dmax, steps)
     """ Geometric library to calculate linewidth of EIT peak (FWHM) """
-    F = FWHM(tlist) 
+    F = FWHM(tlist)
     first_line = LineString(np.column_stack((dlist/1e6, np.full(len(tlist), F[0]))))
     second_line = LineString(np.column_stack((dlist/1e6, tlist)))
     intersection = first_line.intersection(second_line)
-    peak_width = ((np.abs(intersection[1].x) - np.abs(intersection[2].x)))
+    print(intersection)
+    i1 = intersection[1].x 
+    i2 = intersection[2].x
+    if i1 == 0.0:
+        pw = np.abs(i2)
+    if i1 == 0.0:
+        pw = np.abs(i2)
+    if i1 < 0 :
+        pw = np.abs(i1-i2)
+    if i1 > 0:
+        pw = i2-i1
     """ Plotting"""
     fig = plt.figure()
     ax = fig.add_subplot(111)
@@ -535,7 +545,7 @@ def trans_plot(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin=-50
                         f"$\gamma_c$ = {lwc/1e6:.1f} $MHz$" "\n" f"Probe power = {pp*1e6:.1f} $\mu W$" "\n" f"Coupling power = {cp*1e3:.1f} $mW$")
     ax.set_xlabel(r"$\Delta_p$ / $MHz$")
     ax.set_ylabel(r"Probe Transmission")
-    ax.text(0.4, 0.65, f"EIT peak FWHM = {peak_width:.2f} $MHz$", transform=ax.transAxes, fontsize=10, verticalalignment='top')
+    ax.text(0.4, 0.65, f"EIT peak FWHM = {pw:.2f} $MHz$", transform=ax.transAxes, fontsize=10, verticalalignment='top')
     ax.legend()
     plt.show()
     
