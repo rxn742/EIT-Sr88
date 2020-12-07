@@ -34,11 +34,15 @@ ir = rstate*istate.dag() # intermediate to excited
 ri = istate*rstate.dag() # excited to intermediate
 
 """define experimental parameters"""
+
+global dri
+global dig
+
 pp = 1e-6 # Probe laser power in W
 cp = 250e-3 # Coupling laser power in W
-d = 4e-3 # Laser beam diameter in m
-Ip = pp/(np.pi*(d/2)**2) # Probe intensity
-Ic = cp/(np.pi*(d/2)**2) # Coupling intensity
+ld = 4e-3 # Laser beam diameter in m
+Ip = pp/(np.pi*(ld/2)**2) # Probe intensity
+Ic = cp/(np.pi*(ld/2)**2) # Coupling intensity
 dri = np.sqrt((3*1.6e-4*hbar*413.3e-9*e**2)/(4*np.pi*m_e*c)) # r-i dipole matrix element
 dig = np.sqrt((3*1.91*hbar*461e-9*e**2)/(4*np.pi*m_e*c)) # i-g dipole matrix element
 gri = 4e4 # Spontaneous emission rate from r to i
@@ -50,6 +54,7 @@ lwc = 1e6 # Coupling laser linewidth in Hz
 lwp = 1e6 # Probe laser linewidth in Hz
 kp = 2*np.pi/461e-9 # Probe wavevector in m^-1
 kc = 2*np.pi/413e-9 # Coupling wavevector in m^-1
+delta_c = 8e6 # Coupling beam detuning in Hz
 
 """defining functions"""
 
@@ -420,6 +425,49 @@ def tgauss(density, delta_p, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp,
     a = kp*np.abs(chiavg.imag)
     return np.exp(-a*3e-3)
 
+def tcalcnod(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin, dmax, steps):
+    """
+    This function generates an array of transmission values for a generated list of probe detunings
+    Parameters
+    ---------- 
+    delta_c : float
+        Coupling detuning in Hz.
+    Omega_p : float
+        Probe Rabi frequency in Hz.
+    Omega_c : float
+        Coupling Rabi frequency in Hz.
+    gamma_ri : float
+        r-i spontaneous emission rate.
+    gamma_ig : float
+        i-g spontaneous emission rate.
+    lwp : float
+        Probe beam linewidth in Hz
+    lwc : float
+        Coupling beam linewidth in Hz
+    dmin : float
+        Lower bound of Probe detuning in MHz
+    dmax : float
+        Upper bound of Probe detuning in MHz
+    steps : int
+        Number of Probe detunings to calculate the transmission at 
+
+    Returns
+    -------
+    dlist : numpy.ndarray, dtype = float64
+        Array of Probe detunings
+    tlist : numpy.ndarray, dtype = float64
+        Array of transmission values corresponding to the detunings
+
+    """
+    tlist = np.empty(steps+1)
+    dlist = np.empty(steps+1)
+    d=(dmax-dmin)*(steps)**(-1)
+    for i in range(0, steps+1):
+        dlist[i] = dmin
+        tlist[i] = t(density, dmin, delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc)
+        dmin+=d
+    return dlist, tlist
+
 def tcalc(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin, dmax, steps):
     """
     This function generates an array of transmission values for a generated list of probe detunings
@@ -519,21 +567,7 @@ def trans_plot(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin=-50
     """
     dlist, tlist = tcalc(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin, dmax, steps)
     """ Geometric library to calculate linewidth of EIT peak (FWHM) """
-    F = FWHM(tlist)
-    first_line = LineString(np.column_stack((dlist/1e6, np.full(len(tlist), F[0]))))
-    second_line = LineString(np.column_stack((dlist/1e6, tlist)))
-    intersection = first_line.intersection(second_line)
-    print(intersection)
-    i1 = intersection[1].x 
-    i2 = intersection[2].x
-    if i1 == 0.0:
-        pw = np.abs(i2)
-    if i1 == 0.0:
-        pw = np.abs(i2)
-    if i1 < 0 :
-        pw = np.abs(i1-i2)
-    if i1 > 0:
-        pw = i2-i1
+    pw = FWHM(dlist, tlist)
     """ Plotting"""
     fig = plt.figure()
     ax = fig.add_subplot(111)
@@ -549,7 +583,7 @@ def trans_plot(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin=-50
     ax.legend()
     plt.show()
     
-def FWHM(t):
+def FWHM(dlist, tlist):
     """
     This function calculates the transmission value at half the height of the EIT peak
     Parameters
@@ -563,10 +597,35 @@ def FWHM(t):
         The transmission value at half maximum of the EIT peak
 
     """
-    peak = find_peaks(t)[0]
-    width = peak_widths(t, peak)
+    peak = find_peaks(tlist)[0]
+    width = peak_widths(tlist, peak)
     height = width[1]
-    return height
+    first_line = LineString(np.column_stack((dlist/1e6, np.full(len(tlist), height))))
+    second_line = LineString(np.column_stack((dlist/1e6, tlist)))
+    intersection = first_line.intersection(second_line)
+    ints = []
+    for i in intersection:
+        ints.append(i.x)
+    ints = np.array(ints)
+    if len(ints) == 3:
+        amax = np.argmax(np.abs(ints))
+        ints = np.delete(ints, amax)
+    if len(ints) == 4:
+        amax = np.argmax(np.abs(ints))
+        ints = np.delete(ints, amax)
+        amax = np.argmax(np.abs(ints))
+        ints = np.delete(ints, amax)
+    i1 = ints[0]
+    i2 = ints[1]
+    if i1 == 0.0:
+        pw = np.abs(i2)
+    if i1 == 0.0:
+        pw = np.abs(i2)
+    if i1 < 0 :
+        pw = np.abs(i1-i2)
+    if i1 > 0:
+        pw = i2-i1
+    return pw
 
 def optimize1D(delta_c, gamma_ri, gamma_ig, lwp, lwc, points=1000):
     """
@@ -623,7 +682,7 @@ def optimize1D(delta_c, gamma_ri, gamma_ig, lwp, lwc, points=1000):
     ax.legend()
     plt.show()
     
-def optimize2D(delta_c, gamma_ri, gamma_ig, lwp, lwc, points=100):
+def optimize2D(delta_c, gamma_ri, gamma_ig, lwp, lwc, diameter, points=100):
     """
     This function calculates optimium Rabi frequencies to maximise Rydberg population probability 
     Parameters
@@ -644,18 +703,55 @@ def optimize2D(delta_c, gamma_ri, gamma_ig, lwp, lwc, points=100):
     RP : plot
         Surface plot of maximum Rydberg state population probability against each Rabi frequency 
     """
+    opt = input("What would you like to optimise out of Rydberg population, EIT peak height and EIT peak width? \nEIT H, EIT W or Rydberg \n")
+    probe_power = input("Enter probe beam power range in Watts\n")
+    coupling_power = input("Enter coupling beam power ramge in Watts\n")
+    probe_power = probe_power.split(",")
+    coupling_power = coupling_power.split(",")
+    pplist = np.linspace(float(probe_power[0]), float(probe_power[1]), points)
+    cplist = np.linspace(float(coupling_power[0]), float(coupling_power[1]), points)
+    Ip = pplist/(np.pi*(diameter/2)**2)
+    Ic = cplist/(np.pi*(diameter/2)**2)    
+    Omega_c = (dri/hbar)*np.sqrt((2*Ic)/(c*epsilon_0*1.0003)) # Coupling Rabi frequency
+    Omega_p = (dig/hbar)*np.sqrt((2*Ip)/(c*epsilon_0*1.0003)) # Probe Rabi frequency
     fig = plt.figure()
-    ax = fig.add_subplot(111)
-    Omega_c = np.linspace(1e6, 5e7, points)
-    Omega_p = np.linspace(1e6, 5e7, points)
+    ax = fig.add_subplot(111)    
     x, y = np.meshgrid(Omega_p, Omega_c)
     Z = np.zeros((len(y), len(x)))
-    for i in range(len(x)):
-        for j in range(len(y)):
-            Z[i,j] = np.abs(population(-delta_c, delta_c, x[i,j], y[i,j], gamma_ri, gamma_ig, lwp, lwc)[2,2])
-    m = ax.pcolor(x/1e6, y/1e6, Z, cmap=cm.coolwarm)
-    ax.set_ylabel("$\Omega_c$ / MHz")
-    ax.set_xlabel("$\Omega_p$ / MHz")
-    plt.colorbar(m)
-    plt.title(r"Rydberg state population probability against Rabi frequency")
-    plt.show()
+    if opt == "Rydberg":
+        for i in range(len(x)):
+            for j in range(len(y)):
+                Z[i,j] = np.abs(population(-delta_c, delta_c, x[i,j], y[i,j], gamma_ri, gamma_ig, lwp, lwc)[2,2])
+        m = ax.pcolor(x/1e6, y/1e6, Z, cmap=cm.coolwarm)
+        ax.set_ylabel("$\Omega_c$ / MHz")
+        ax.set_xlabel("$\Omega_p$ / MHz")
+        plt.colorbar(m)
+        plt.title(r"Rydberg state population probability against Rabi frequency")
+        plt.show()
+    if opt == "EIT H":
+        for i in range(len(x)):
+            print(i)
+            for j in range(len(y)):
+                Z[i,j] = np.abs(t(density, -delta_c, delta_c, x[i,j], y[i,j], gamma_ri, gamma_ig, lwp, lwc))
+        m = ax.pcolor(x/1e6, y/1e6, Z, cmap=cm.coolwarm)
+        ax.set_ylabel("$\Omega_c$ / MHz")
+        ax.set_xlabel("$\Omega_p$ / MHz")
+        plt.colorbar(m)
+        plt.title(r"EIT transmission peak height against Rabi frequency")
+        plt.show()
+    if opt == "EIT W":
+        for i in range(len(x)):
+            print(i)
+            for j in range(len(y)):
+                dlist, tlist =  tcalcnod(delta_c, x[i,j], y[i,j], gamma_ri, gamma_ig, lwp, lwc, -50e6, 50e6, 100)
+                try:
+                    Z[i,j] = FWHM(dlist, tlist)
+                except:
+                    x = np.delete(x, [i,j])
+                    y = np.delete(y, [i,j])
+        m = ax.pcolor(x/1e6, y/1e6, Z, cmap=cm.coolwarm)
+        ax.set_ylabel("$\Omega_c$ / MHz")
+        ax.set_xlabel("$\Omega_p$ / MHz")
+        plt.colorbar(m)
+        plt.title(r"EIT transmission peak width against Rabi frequency")
+        plt.show()
