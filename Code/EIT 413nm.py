@@ -585,7 +585,7 @@ def trans_plot(delta_c, Omega_p, Omega_c, gamma_ri, gamma_ig, lwp, lwc, dmin=-50
     
 def FWHM(dlist, tlist):
     """
-    This function calculates the transmission value at half the height of the EIT peak
+    This function calculates the FWHM of the EIT peak in a spectrum
     Parameters
     ----------
     t : numpy.ndarray, dtype = float
@@ -593,8 +593,8 @@ def FWHM(dlist, tlist):
 
     Returns
     -------
-    height : float
-        The transmission value at half maximum of the EIT peak
+    pw : float
+        The FWHM of the EIT Peak in MHz
 
     """
     peak = find_peaks(tlist)[0]
