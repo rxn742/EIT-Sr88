@@ -39,6 +39,7 @@ Omega_p = (dig/hbar)*np.sqrt((2*Ip)/(c*epsilon_0)) # Probe Rabi frequency
 density = 1e15 # Number density of atoms in m^-3
 lwc = 1e6 # Coupling laser linewidth in Hz
 lwp = 1e6 # Probe laser linewidth in Hz
+sl = 3e-3 # Sample length of atoms
 
 """ For population plot run pop_plot(delta_c, dmin, dmax, steps)"""
 """ For transmission plot run trans_plot(delta_c, dmin, dmax, steps)"""

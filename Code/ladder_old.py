@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sun Nov  1 15:51:34 2020
+Created on Mon Feb  8 12:19:18 2021
 
+@author: robgc
+"""
+
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Nov  1 15:51:34 2020
 @author: robgc
 """
 
@@ -12,10 +19,10 @@ import numpy as np
 from scipy.constants import hbar, epsilon_0
 import matplotlib.pyplot as plt
 from scipy.stats import norm
-from scipy.integrate import quad
+from scipy.integrate import trapz
 from scipy.signal import find_peaks, peak_widths
 from shapely.geometry import LineString
-from plotter import dig, gamma_ri, gamma_ig, pp, cp, Omega_c, Omega_p, density, lwp, lwc, kp, kc, sl
+from plotter import dig, gamma_ri, gamma_ig, pp, cp, Omega_c, Omega_p, density, lwp, lwc, kp, kc
 
 """defining the states"""
 gstate = qt.basis(3,0) # ground state
@@ -48,12 +55,10 @@ def Hamiltonian(delta_p, delta_c):
         Probe Rabi frequency in Hz.
     Omega_c : float
         Coupling Rabi frequency in Hz.
-
     Returns
     -------
     Qutip.Qobj (operator)
         Hamiltionian of the system (Uses Qutip convention hbar = 1)
-
     """
     return (-delta_p*(ii + rr) - delta_c*(rr) + Omega_p*(gi + ig)/2 + Omega_c*(ir+ri)/2)
 
@@ -71,7 +76,6 @@ def spon():
     -------
     list, dtype = Qutip.Qobj (operator)
         List of collapse operators for spontaneous emission
-
     """
     return [np.sqrt(gamma_ri)*ri, np.sqrt(gamma_ig)*ig]
 
@@ -83,12 +87,10 @@ def laser_linewidth():
         Probe beam linewidth in Hz
     lwc : float
         Coupling beam linewidth in Hz
-
     Returns
     -------
     lw : numpy.ndarray, shape = 9x9, dtype = float64
         The laser linewidth super operator 
-
     """
     lw = np.zeros((9,9))
     lw[1,5] = -lwp
@@ -120,12 +122,10 @@ def Liouvillian(delta_p, delta_c):
         Probe beam linewidth in Hz
     lwc : float
         Coupling beam linewidth in Hz
-
     Returns
     -------
     L : Qutip.Qobj (super)
         The full Liouvillian super operator of the system for the master eqn
-
     """
     H = Hamiltonian(delta_p, delta_c)
     c_ops = spon()
@@ -156,17 +156,15 @@ def population(delta_p, delta_c):
         Probe beam linewidth in Hz
     lwc : float
         Coupling beam linewidth in Hz
-
     Returns
     -------
     rho : Qutip.Qobj (Density Matrix)
         The steady state density matrix of the 3 level system
-
     """
     rho = qt.steadystate(Liouvillian(delta_p, delta_c))
     return rho
 
-def doppler(v, delta_p, delta_c, mu, sig, state_index):
+def popgauss(delta_p, delta_c, vlist):
     """
     This function generates the population probability for a given probe detuning with Doppler broadening
     Parameters
@@ -187,50 +185,21 @@ elta_c : float
         Coupling beam linewidth in Hz
     vlist : numpy.ndarray, dtype = float
         A list of cross beam velocity groups 
-
     Returns
     -------
     pop : float
         State population probability for a given detuning
-
     """
-    if state_index == (1,0):
-        i = np.imag(population(delta_p-kp*v, delta_c+kc*v)[state_index]*gauss(v, mu, sig))
-    else:
-        i = population(delta_p-kp*v, delta_c+kc*v)[state_index]*gauss(v, mu, sig)
-    return i
+    poplist = np.empty(len(vlist), dtype = complex) # list for chi values for each velocity group
+    for i in range(len(vlist)):
+        detuning = delta_p-kp*vlist[i]
+        p = population(detuning, dclistP[i])[state_index]
+        poplist[i] = p
+    i = poplist*normpdfP
+    pop = trapz(i, vlist)
+    return np.abs(pop)
 
-def dopplerint(delta_p, delta_c, mu, sig, state_index):
-    """
-    This function generates the population probability for a given probe detuning with Doppler broadening
-    Parameters
-    ----------
-elta_c : float
-        Coupling detuning in Hz.
-    Omega_p : float
-        Probe Rabi frequency in Hz.
-    Omega_c : float
-        Coupling Rabi frequency in Hz.
-    gamma_ri : float
-        r-i spontaneous emission rate.
-    gamma_ig : float
-        i-g spontaneous emission rate.
-    lwp : float
-        Probe beam linewidth in Hz
-    lwc : float
-        Coupling beam linewidth in Hz
-    vlist : numpy.ndarray, dtype = float
-        A list of cross beam velocity groups 
-
-    Returns
-    -------
-    pop : float
-        State population probability for a given detuning
-
-    """
-    return quad(doppler, mu-3*sig, mu+3*sig, args=(delta_p, delta_c, mu, sig, state_index))[0]
-
-def popcalc(delta_c, dmin, dmax, steps, state_index):
+def popcalc(delta_c, dmin, dmax, steps):
     """
     This function generates an array of population values for a generated list of probe detunings
     Parameters
@@ -255,15 +224,15 @@ def popcalc(delta_c, dmin, dmax, steps, state_index):
         Upper bound of Probe detuning in MHz
     steps : int
         Number of Probe detunings to calculate the population probability
-
     Returns
     -------
     dlist : numpy.ndarray, dtype = float64
         Array of Probe detunings
     plist : numpy.ndarray, dtype = float64
         Array of population probabilities corresponding to the detunings
-
     """
+    global normpdfP # global variable for the gaussian distribution of velocity
+    global dclistP # global variable for the list of Doppler shifted coupling detunings 
     
     plist = np.empty(steps+1)
     dlist = np.empty(steps+1)
@@ -275,10 +244,15 @@ def popcalc(delta_c, dmin, dmax, steps, state_index):
         musig = musig.split(",")
         mu = float(musig[0])
         sig = float(musig[1])
+        vlist = np.linspace(-(mu+4*sig), mu+4*sig, 100) # list of possible velocity groups
+        normpdfP = norm(mu, sig).pdf(vlist) # Gaussian distribution
+        dclistP = np.empty(len(vlist))
+        for i in range(len(vlist)):
+            dclistP[i] = delta_c+kc*vlist[i]
         for i in range(0, steps+1):
             print(count)
             dlist[i] = dmin
-            plist[i] = np.abs(dopplerint(dmin, delta_c, mu, sig, state_index))
+            plist[i] = popgauss(dmin, delta_c, vlist)
             dmin+=d
             count+=1
     else:
@@ -313,13 +287,12 @@ def pop_plot(delta_c, dmin=-500e6, dmax=500e6, steps=2000):
         Upper bound of Probe detuning in MHz
     steps : int
         Number of Probe detunings to calculate the population probabilities 
-
     Returns
     -------
     Population : plot
         Plot of chosen state population probability against probe detuning
-
     """
+    global state_index
     state = input("Which state do you want to plot? \nGround, Intermediate, Rydberg \n")
     if state == "Ground":
         state_index = 0,0
@@ -328,7 +301,7 @@ def pop_plot(delta_c, dmin=-500e6, dmax=500e6, steps=2000):
     if state == "Rydberg":
         state_index = 2,2
     
-    dlist, plist = popcalc(delta_c, dmin, dmax, steps, state_index)
+    dlist, plist = popcalc(delta_c, dmin, dmax, steps)
     fig = plt.figure()
     ax = fig.add_subplot(111)
     plt.title(f"{state} population")
@@ -365,19 +338,57 @@ def transmission(delta_p, delta_c):
         Probe beam linewidth in Hz
     lwc : float
         Coupling beam linewidth in Hz
-
     Returns
     -------
     T : float
         Relative probe transmission value for the given parameters
-
     """
     p = population(delta_p, delta_c)[1,0] # element rho_ig
     chi = (-2*density*dig**2*p)/(hbar*epsilon_0*Omega_p) # calculate susceptibility
     a = kp*np.abs(chi.imag) # absorption coefficient
-    T = np.exp(-a*sl)
+    T = np.exp(-a*3e-3)
     return T
 
+def tgauss(delta_p, delta_c, vlist):
+    """
+    This function calculates a transmission value including Doppler broadening
+    Parameters
+    ----------
+    density : float
+        Number density of atoms in the sample.   
+    delta_p : float
+        Probe detuning in Hz.
+    delta_c : float
+        Coupling detuning in Hz.
+    Omega_p : float
+        Probe Rabi frequency in Hz.
+    Omega_c : float
+        Coupling Rabi frequency in Hz.
+    gamma_ri : float
+        r-i spontaneous emission rate.
+    gamma_ig : float
+        i-g spontaneous emission rate.
+    lwp : float
+        Probe beam linewidth in Hz
+    lwc : float
+        Coupling beam linewidth in Hz
+    vlist : numpy.ndarray, dtype = float64
+        An array of possible cross beam velocities
+    Returns
+    -------
+    T : float
+        Relative Doppler broadened probe transmission value for the given parameters  
+    """
+    chilist = np.empty(len(vlist), dtype = complex) # list for chi values for each velocity group
+    for i in range(len(vlist)):
+        detuning = delta_p-kp*vlist[i]
+        p = population(detuning, dclistT[i])[1,0]
+        chi = (-2*density*dig**2*p)/(hbar*epsilon_0*Omega_p)
+        chilist[i] = chi
+    i = chilist*normpdfT
+    chiavg = trapz(i, vlist)
+    a = kp*np.abs(chiavg.imag)
+    return np.exp(-a*3e-3)
 
 def tcalc(delta_c, dmin, dmax, steps):
     """
@@ -404,15 +415,15 @@ def tcalc(delta_c, dmin, dmax, steps):
         Upper bound of Probe detuning in MHz
     steps : int
         Number of Probe detunings to calculate the transmission at 
-
     Returns
     -------
     dlist : numpy.ndarray, dtype = float64
         Array of Probe detunings
     tlist : numpy.ndarray, dtype = float64
         Array of transmission values corresponding to the detunings
-
     """
+    global normpdfT # global variable for the gaussian distribution of velocity
+    global dclistT # global variable for the list of Doppler shifted coupling detunings 
     
     tlist = np.empty(steps+1)
     dlist = np.empty(steps+1)
@@ -424,14 +435,15 @@ def tcalc(delta_c, dmin, dmax, steps):
         musig = musig.split(",")
         mu = float(musig[0])
         sig = float(musig[1])
-        elem = 1,0
+        vlist = np.linspace(-(mu+4*sig), mu+4*sig, 100) # list of possible velocity groups
+        normpdfT = norm(mu, sig).pdf(vlist) # Gaussian distribution
+        dclistT = np.empty(len(vlist))
+        for i in range(len(vlist)):
+            dclistT[i] = delta_c+kc*vlist[i]
         for i in range(0, steps+1):
             print(count)
             dlist[i] = dmin
-            p_21_imag = dopplerint(dmin, delta_c, mu, sig, elem)
-            chi_imag = (-2*density*dig**2*p_21_imag)/(hbar*epsilon_0*Omega_p)
-            a = kp*np.abs(chi_imag)
-            tlist[i] = np.exp(-a*sl)
+            tlist[i] = tgauss(dmin, delta_c, vlist)
             dmin+=d
             count+=1
     else:
@@ -466,12 +478,10 @@ def trans_plot(delta_c, dmin=-500e6, dmax=500e6, steps=2000):
         Upper bound of Probe detuning in MHz
     steps : int
         Number of Probe detunings to calculate the transmission at 
-
     Returns
     -------
     T : plot
         Plot of probe beam transmission against probe detuning, with EIT FWHM
-
     """
     dlist, tlist = tcalc(delta_c, dmin, dmax, steps)
     """ Plotting"""
@@ -502,12 +512,10 @@ def FWHM(dlist, tlist):
     ----------
     t : numpy.ndarray, dtype = float
         Calculated transmission values for a range of detunings
-
     Returns
     -------
     pw : float
         The FWHM of the EIT Peak in MHz
-
     """
     peak = find_peaks(tlist)[0]
     width = peak_widths(tlist, peak)
@@ -538,7 +546,3 @@ def FWHM(dlist, tlist):
     if i1 > 0:
         pw = i2-i1
     return pw
-
-def gauss(v, mu, sig):
-    return norm(mu, sig).pdf(v)
-    
