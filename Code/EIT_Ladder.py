@@ -108,18 +108,6 @@ def Liouvillian(delta_p, delta_c):
         Probe detuning in Hz.
     delta_c : float
         Coupling detuning in Hz.
-    Omega_p : float
-        Probe Rabi frequency in Hz.
-    Omega_c : float
-        Coupling Rabi frequency in Hz.
-    gamma_ri : float
-        r-i spontaneous emission rate.
-    gamma_ig : float
-        i-g spontaneous emission rate.
-    lwp : float
-        Probe beam linewidth in Hz
-    lwc : float
-        Coupling beam linewidth in Hz
 
     Returns
     -------
@@ -144,18 +132,6 @@ def population(delta_p, delta_c):
         Probe detuning in Hz.
     delta_c : float
         Coupling detuning in Hz.
-    Omega_p : float
-        Probe Rabi frequency in Hz.
-    Omega_c : float
-        Coupling Rabi frequency in Hz.
-    gamma_ri : float
-        r-i spontaneous emission rate.
-    gamma_ig : float
-        i-g spontaneous emission rate.
-    lwp : float
-        Probe beam linewidth in Hz
-    lwc : float
-        Coupling beam linewidth in Hz
 
     Returns
     -------
@@ -168,68 +144,59 @@ def population(delta_p, delta_c):
 
 def doppler(v, delta_p, delta_c, mu, sig, state_index):
     """
-    This function generates the population probability for a given probe detuning with Doppler broadening
+    This function generates the integrand to solve when including Doppler broadening
     Parameters
     ----------
-elta_c : float
+    v : float
+        Transverse velocity of atom
+    delta_p : float
+        Probe detuning in Hz.
+    delta_c : float
         Coupling detuning in Hz.
-    Omega_p : float
-        Probe Rabi frequency in Hz.
-    Omega_c : float
-        Coupling Rabi frequency in Hz.
-    gamma_ri : float
-        r-i spontaneous emission rate.
-    gamma_ig : float
-        i-g spontaneous emission rate.
-    lwp : float
-        Probe beam linewidth in Hz
-    lwc : float
-        Coupling beam linewidth in Hz
-    vlist : numpy.ndarray, dtype = float
-        A list of cross beam velocity groups 
-
+    mu : float
+        Mean transverse velocity
+    sig : float
+        Transverse velocity standard deviation
+    state_index : tuple
+        chosen element of the density matrix
+        
     Returns
     -------
-    pop : float
-        State population probability for a given detuning
+    i : float
+        Gaussian weighted integrand
 
     """
     if state_index == (1,0):
         i = np.imag(population(delta_p-kp*v, delta_c+kc*v)[state_index]*gauss(v, mu, sig))
     else:
-        i = population(delta_p-kp*v, delta_c+kc*v)[state_index]*gauss(v, mu, sig)
+        i = np.real(population(delta_p-kp*v, delta_c+kc*v)[state_index]*gauss(v, mu, sig))
     return i
 
 def dopplerint(delta_p, delta_c, mu, sig, state_index):
     """
-    This function generates the population probability for a given probe detuning with Doppler broadening
+    This function generates the integrand to solve when including Doppler broadening
     Parameters
     ----------
-elta_c : float
+    delta_p : float
+        Probe detuning in Hz.
+    delta_c : float
         Coupling detuning in Hz.
-    Omega_p : float
-        Probe Rabi frequency in Hz.
-    Omega_c : float
-        Coupling Rabi frequency in Hz.
-    gamma_ri : float
-        r-i spontaneous emission rate.
-    gamma_ig : float
-        i-g spontaneous emission rate.
-    lwp : float
-        Probe beam linewidth in Hz
-    lwc : float
-        Coupling beam linewidth in Hz
-    vlist : numpy.ndarray, dtype = float
-        A list of cross beam velocity groups 
-
+    mu : float
+        Mean transverse velocity
+    sig : float
+        Transverse velocity standard deviation
+    state_index : tuple
+        chosen element of the density matrix
+        
     Returns
     -------
-    pop : float
-        State population probability for a given detuning
+    p_avg : float
+        Doppler averaged density matrix element
 
     """
-    return quad(doppler, mu-3*sig, mu+3*sig, args=(delta_p, delta_c, mu, sig, state_index))[0]
-
+    p_avg = quad(doppler, mu-3*sig, mu+3*sig, args=(delta_p, delta_c, mu, sig, state_index))[0]
+    return p_avg
+    
 def popcalc(delta_c, dmin, dmax, steps, state_index):
     """
     This function generates an array of population values for a generated list of probe detunings
@@ -237,24 +204,14 @@ def popcalc(delta_c, dmin, dmax, steps, state_index):
     ---------- 
     delta_c : float
         Coupling detuning in Hz.
-    Omega_p : float
-        Probe Rabi frequency in Hz.
-    Omega_c : float
-        Coupling Rabi frequency in Hz.
-    gamma_ri : float
-        r-i spontaneous emission rate.
-    gamma_ig : float
-        i-g spontaneous emission rate.
-    lwp : float
-        Probe beam linewidth in Hz
-    lwc : float
-        Coupling beam linewidth in Hz
     dmin : float
         Lower bound of Probe detuning in MHz
     dmax : float
         Upper bound of Probe detuning in MHz
     steps : int
         Number of Probe detunings to calculate the population probability
+    state_index : tuple
+        chosen element of the density matrix
 
     Returns
     -------
@@ -264,7 +221,6 @@ def popcalc(delta_c, dmin, dmax, steps, state_index):
         Array of population probabilities corresponding to the detunings
 
     """
-    
     plist = np.empty(steps+1)
     dlist = np.empty(steps+1)
     count = 0
@@ -295,18 +251,6 @@ def pop_plot(delta_c, dmin=-500e6, dmax=500e6, steps=2000):
     ---------- 
     delta_c : float
         Coupling detuning in Hz.
-    Omega_p : float
-        Probe Rabi frequency in Hz.
-    Omega_c : float
-        Coupling Rabi frequency in Hz.
-    gamma_ri : float
-        r-i spontaneous emission rate.
-    gamma_ig : float
-        i-g spontaneous emission rate.
-    lwp : float
-        Probe beam linewidth in Hz
-    lwc : float
-        Coupling beam linewidth in Hz
     dmin : float
         Lower bound of Probe detuning in MHz
     dmax : float
@@ -353,18 +297,8 @@ def transmission(delta_p, delta_c):
         Probe detuning in Hz.
     delta_c : float
         Coupling detuning in Hz.
-    Omega_p : float
-        Probe Rabi frequency in Hz.
-    Omega_c : float
-        Coupling Rabi frequency in Hz.
-    gamma_ri : float
-        r-i spontaneous emission rate.
-    gamma_ig : float
-        i-g spontaneous emission rate.
-    lwp : float
-        Probe beam linewidth in Hz
-    lwc : float
-        Coupling beam linewidth in Hz
+    sl : float
+        Atomic beam diameter
 
     Returns
     -------
@@ -386,18 +320,6 @@ def tcalc(delta_c, dmin, dmax, steps):
     ---------- 
     delta_c : float
         Coupling detuning in Hz.
-    Omega_p : float
-        Probe Rabi frequency in Hz.
-    Omega_c : float
-        Coupling Rabi frequency in Hz.
-    gamma_ri : float
-        r-i spontaneous emission rate.
-    gamma_ig : float
-        i-g spontaneous emission rate.
-    lwp : float
-        Probe beam linewidth in Hz
-    lwc : float
-        Coupling beam linewidth in Hz
     dmin : float
         Lower bound of Probe detuning in MHz
     dmax : float
@@ -448,18 +370,6 @@ def trans_plot(delta_c, dmin=-500e6, dmax=500e6, steps=2000):
     ---------- 
     delta_c : float
         Coupling detuning in Hz.
-    Omega_p : float
-        Probe Rabi frequency in Hz.
-    Omega_c : float
-        Coupling Rabi frequency in Hz.
-    gamma_ri : float
-        r-i spontaneous emission rate.
-    gamma_ig : float
-        i-g spontaneous emission rate.
-    lwp : float
-        Probe beam linewidth in Hz
-    lwc : float
-        Coupling beam linewidth in Hz
     dmin : float
         Lower bound of Probe detuning in MHz
     dmax : float
