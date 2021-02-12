@@ -168,7 +168,7 @@ def doppler(v, delta_p, delta_c, mu, sig, state_index):
 
     """
     if state_index == (1,0):
-        i = np.imag(population(delta_p-kp*v, delta_c+kc*v)[state_index]*gauss(v, mu, sig))
+        i = np.imag(population(delta_p-kp*v, 0)[state_index]*gauss(v, mu, sig))
     else:
         i = np.real(population(delta_p-kp*v, delta_c+kc*v)[state_index]*gauss(v, mu, sig))
     return i
@@ -314,7 +314,7 @@ def transmission(delta_p, delta_c):
     return T
 
 
-def tcalc(delta_c, dmin, dmax, steps):
+def tcalc(delta_c, dmin, dmax, steps, musig):
     """
     This function generates an array of transmission values for a generated list of probe detunings
     Parameters
@@ -341,22 +341,22 @@ def tcalc(delta_c, dmin, dmax, steps):
     dlist = np.empty(steps+1)
     count = 0
     d=(dmax-dmin)*(steps)**(-1)
-    gauss = input("Do you want to include a velocity distribution? \nY/N \n")
+    gauss = "Y"
     if gauss == "Y":
-        musig = input("Input mean and standard deviation transverse velocity \nmu, sig \n")
-        musig = musig.split(",")
+        #musig = input("Input mean and standard deviation transverse velocity \nmu, sig \n")
+        #musig = musig.split(",")
         mu = float(musig[0])
         sig = float(musig[1])
         elem = 1,0
         for i in range(0, steps+1):
-            print(count)
+            #print(count)
             dlist[i] = dmin
             p_21_imag = dopplerint(dmin, delta_c, mu, sig, elem)
             chi_imag = (-2*density*dig**2*p_21_imag)/(hbar*epsilon_0*Omega_p)
             a = kp*np.abs(chi_imag)
             tlist[i] = np.exp(-a*sl)
             dmin+=d
-            count+=1
+            #count+=1
     else:
         for i in range(0, steps+1):
             dlist[i] = dmin
@@ -469,7 +469,7 @@ def FWHM(dlist, tlist):
         The FWHM of the EIT Peak in MHz
 
     """
-    peak = find_peaks(tlist, distance = 999)[0]
+    peak = find_peaks(tlist)[0]
     width = peak_widths(tlist, peak)
     height = width[1]
     first_line = LineString(np.column_stack((dlist/1e6, np.full(len(tlist), height))))
