@@ -16,7 +16,7 @@ from scipy.stats import norm
 from scipy.integrate import quad
 from scipy.signal import find_peaks, peak_widths
 from shapely.geometry import LineString
-from plotter import dig, gamma_ri, gamma_ig, pp, cp, Omega_c, Omega_p, density, lwp, lwc, kp, kc, sl
+from plotter import dig, gamma_ri, gamma_ig, pp, cp, lwp, lwc, kp, kc
 
 """defining the states"""
 gstate = qt.basis(3,0) # ground state
@@ -36,7 +36,7 @@ ri = istate*rstate.dag() # excited to intermediate
 
 """defining functions"""
 
-def Hamiltonian(delta_p, delta_c):
+def Hamiltonian(delta_p, delta_c, Omega_p, Omega_c):
     """
     This function defines the Hamiltonian of the 3 level system
     Parameters
@@ -100,7 +100,7 @@ def laser_linewidth():
     lw[7,7] = -lwc
     return lw
 
-def Liouvillian(delta_p, delta_c):
+def Liouvillian(delta_p, delta_c, Omega_p, Omega_c):
     """
     This function calculates the Liouvillian of the system 
     Parameters
@@ -116,7 +116,7 @@ def Liouvillian(delta_p, delta_c):
         The full Liouvillian super operator of the system for the master eqn
 
     """
-    H = Hamiltonian(delta_p, delta_c)
+    H = Hamiltonian(delta_p, delta_c, Omega_p, Omega_c)
     c_ops = spon()
     L = qt.liouvillian(H, c_ops)
     L_arr = L.data.toarray() # change to numpy array to add on laser linewidth matrix
@@ -124,7 +124,7 @@ def Liouvillian(delta_p, delta_c):
     L = qt.Qobj(L_arr, dims=[[[3], [3]], [[3], [3]]], type="super") # change back to Qobj
     return L
 
-def population(delta_p, delta_c):
+def population(delta_p, delta_c, Omega_p, Omega_c):
     """
     This function solves for the steady state density matrix of the system
     Parameters
@@ -140,10 +140,10 @@ def population(delta_p, delta_c):
         The steady state density matrix of the 3 level system
 
     """
-    rho = qt.steadystate(Liouvillian(delta_p, delta_c))
+    rho = qt.steadystate(Liouvillian(delta_p, delta_c, Omega_p, Omega_c))
     return rho
 
-def doppler(v, delta_p, delta_c, mu, sig, state_index):
+def doppler(v, delta_p, delta_c, Omega_p, Omega_c, mu, sig, state_index):
     """
     This function generates the integrand to solve when including Doppler broadening
     Parameters
@@ -168,12 +168,12 @@ def doppler(v, delta_p, delta_c, mu, sig, state_index):
 
     """
     if state_index == (1,0):
-        i = np.imag(population(delta_p-kp*v, 0)[state_index]*gauss(v, mu, sig))
+        i = np.imag(population(delta_p-kp*v, delta_c+kc*v, Omega_p, Omega_c)[state_index]*gauss(v, mu, sig))
     else:
-        i = np.real(population(delta_p-kp*v, delta_c+kc*v)[state_index]*gauss(v, mu, sig))
+        i = np.real(population(delta_p-kp*v, delta_c+kc*v, Omega_p, Omega_c)[state_index]*gauss(v, mu, sig))
     return i
 
-def dopplerint(delta_p, delta_c, mu, sig, state_index):
+def dopplerint(delta_p, delta_c, Omega_p, Omega_c, mu, sig, state_index):
     """
     This function generates the integrand to solve when including Doppler broadening
     Parameters
@@ -195,10 +195,10 @@ def dopplerint(delta_p, delta_c, mu, sig, state_index):
         Doppler averaged density matrix element
 
     """
-    p_avg = quad(doppler, mu-3*sig, mu+3*sig, args=(delta_p, delta_c, mu, sig, state_index))[0]
+    p_avg = quad(doppler, mu-3*sig, mu+3*sig, args=(delta_p, delta_c, Omega_p, Omega_c, mu, sig, state_index))[0]
     return p_avg
     
-def popcalc(delta_c, dmin, dmax, steps, state_index):
+def popcalc(delta_c, Omega_p, Omega_c, dmin, dmax, steps, state_index):
     """
     This function generates an array of population values for a generated list of probe detunings
     Parameters
@@ -235,59 +235,17 @@ def popcalc(delta_c, dmin, dmax, steps, state_index):
         for i in range(0, steps+1):
             print(count)
             dlist[i] = dmin
-            plist[i] = np.abs(dopplerint(dmin, delta_c, mu, sig, state_index))
+            plist[i] = np.abs(dopplerint(dmin, delta_c, Omega_p, Omega_c, mu, sig, state_index))
             dmin+=d
             count+=1
     else:
         for i in range(0, steps+1):
             dlist[i] = dmin
-            plist[i] = population(dmin, delta_c)[state_index]
+            plist[i] = population(dmin, delta_c, Omega_p, Omega_c)[state_index]
             dmin+=d
     return dlist, plist
 
-def pop_plot(delta_c, dmin=-500e6, dmax=500e6, steps=2000):
-    """
-    This function plots the population probability of a chosen state against probe detuning
-    Parameters
-    ---------- 
-    delta_c : float
-        Coupling detuning in Hz.
-    dmin : float
-        Lower bound of Probe detuning in MHz
-    dmax : float
-        Upper bound of Probe detuning in MHz
-    steps : int
-        Number of Probe detunings to calculate the population probabilities 
-
-    Returns
-    -------
-    Population : plot
-        Plot of chosen state population probability against probe detuning
-
-    """
-    state = input("Which state do you want to plot? \nGround, Intermediate, Rydberg \n")
-    if state == "Ground":
-        state_index = 0,0
-    if state == "Intermediate":
-        state_index = 1,1
-    if state == "Rydberg":
-        state_index = 2,2
-    
-    dlist, plist = popcalc(delta_c, dmin, dmax, steps, state_index)
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    plt.title(f"{state} population")
-    ax.plot(dlist, plist, color="orange", label="$\Omega_c=$" f"{Omega_c/1e6:.1f} $MHz$"\
-            "\n" "$\Omega_p=$" f"{Omega_p/1e6:.1f} $MHz$" "\n" "$\Gamma_{ri}$" f"= {gamma_ri/(1e3*2*np.pi):.2f} $KHz$" "\n" "$\Gamma_{ig}$" f"= {gamma_ig/(1e6*2*np.pi):.2f} $MHz$" "\n" "$A_{r}$" f" = {gamma_ri/1e4:.2f}"\
-                r" x $10^4s^{-1}$" "\n""$A_{i} =$"\
-                    f"{gamma_ig/1e6:.1f}" r" x $10^6s^{-1}$" "\n" "$\Delta_c =$" f"{delta_c/1e6:.1f} $MHz$" "\n" f"$\gamma_p$ = {lwp/1e6:.1f} $MHz$" "\n"\
-                        f"$\gamma_c$ = {lwc/1e6:.1f} $MHz$" "\n" f"Probe power = {pp*1e6:.1f} $\mu W$" "\n" f"Coupling power = {cp*1e3:.1f} $mW$")
-    ax.set_xlabel(r"$\Delta_p$ / MHz")
-    ax.set_ylabel(f"{state} state popultaion")
-    ax.legend()
-    plt.show()
-
-def transmission(delta_p, delta_c):
+def transmission(delta_p, delta_c, Omega_p, Omega_c, density, sl):
     """
     This function calculates a transmission value for a given set of parameters
     Parameters
@@ -307,14 +265,14 @@ def transmission(delta_p, delta_c):
         Relative probe transmission value for the given parameters
 
     """
-    p = population(delta_p, delta_c)[1,0] # element rho_ig
+    p = population(delta_p, delta_c, Omega_p, Omega_c)[1,0] # element rho_ig
     chi = (-2*density*dig**2*p)/(hbar*epsilon_0*Omega_p) # calculate susceptibility
     a = kp*np.abs(chi.imag) # absorption coefficient
     T = np.exp(-a*sl)
     return T
 
 
-def tcalc(delta_c, dmin, dmax, steps, musig):
+def tcalc(delta_c, Omega_p, Omega_c, dmin, dmax, steps, density, sl, musig=[0,1]):
     """
     This function generates an array of transmission values for a generated list of probe detunings
     Parameters
@@ -339,19 +297,17 @@ def tcalc(delta_c, dmin, dmax, steps, musig):
     
     tlist = np.empty(steps+1)
     dlist = np.empty(steps+1)
-    count = 0
+    #count = 0
     d=(dmax-dmin)*(steps)**(-1)
-    gauss = "Y"
+    gauss = "N"
     if gauss == "Y":
-        #musig = input("Input mean and standard deviation transverse velocity \nmu, sig \n")
-        #musig = musig.split(",")
         mu = float(musig[0])
         sig = float(musig[1])
         elem = 1,0
         for i in range(0, steps+1):
             #print(count)
             dlist[i] = dmin
-            p_21_imag = dopplerint(dmin, delta_c, mu, sig, elem)
+            p_21_imag = dopplerint(dmin, delta_c, Omega_p, Omega_c, mu, sig, elem)
             chi_imag = (-2*density*dig**2*p_21_imag)/(hbar*epsilon_0*Omega_p)
             a = kp*np.abs(chi_imag)
             tlist[i] = np.exp(-a*sl)
@@ -360,100 +316,9 @@ def tcalc(delta_c, dmin, dmax, steps, musig):
     else:
         for i in range(0, steps+1):
             dlist[i] = dmin
-            tlist[i] = transmission(dmin, delta_c)
+            tlist[i] = transmission(dmin, delta_c, Omega_p, Omega_c, density, sl)
             dmin+=d
-    return dlist, tlist
-    
-def trans_plot(delta_c, dmin=-500e6, dmax=500e6, steps=2000):
-    """
-    This function plots probe beam transmission for an array of probe detunings
-    Parameters
-    ---------- 
-    delta_c : float
-        Coupling detuning in Hz.
-    dmin : float
-        Lower bound of Probe detuning in MHz
-    dmax : float
-        Upper bound of Probe detuning in MHz
-    steps : int
-        Number of Probe detunings to calculate the transmission at 
-
-    Returns
-    -------
-    T : plot
-        Plot of probe beam transmission against probe detuning, with EIT FWHM
-
-    """
-    dlist, tlist = tcalc(delta_c, dmin, dmax, steps)
-    """ Plotting"""
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    """ Geometric library to calculate linewidth of EIT peak (FWHM) """
-    try:
-        pw = FWHM(dlist, tlist)
-        ax.text(0.5, 0.97, f"EIT peak FWHM = {pw/(2*np.pi):.2f} $MHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
-    except:
-        pass
-    
-    plt.title(r"Probe transmission against probe beam detuning")
-    ax.plot(dlist/(1e6*2*np.pi), tlist, color="orange", label="$\Omega_c=$" f"{Omega_c/1e6:.1f} $MHz$"\
-            "\n" "$\Omega_p=$" f"{Omega_p/1e6:.1f} $MHz$" "\n" "$\Gamma_{ri}$" f"= {gamma_ri/(1e3*2*np.pi):.2f} $KHz$" "\n" "$\Gamma_{ig}$" f"= {gamma_ig/(1e6*2*np.pi):.2f} $MHz$" "\n" "$A_{r}$" f" = {gamma_ri/1e4:.2f}"\
-                r" x $10^4s^{-1}$" "\n""$A_{i} =$"\
-                    f"{gamma_ig/1e6:.1f}" r" x $10^6s^{-1}$" "\n" "$\Delta_c =$" f"{delta_c/1e6:.1f} $MHz$" "\n" f"$\gamma_p$ = {lwp/1e6:.1f} $MHz$" "\n"\
-                        f"$\gamma_c$ = {lwc/1e6:.1f} $MHz$" "\n" f"Probe power = {pp*1e6:.1f} $\mu W$" "\n" f"Coupling power = {cp*1e3:.1f} $mW$")
-    ax.set_xlabel(r"$\Delta_p / 2 \pi$ ($MHz$)")
-    ax.set_ylabel(r"Probe Transmission")
-    ax.legend()
-    plt.show()
-    
-def reltrans_plot(delta_c, dmin=-500e6, dmax=500e6, steps=2000):
-    """
-    This function plots probe beam transmission for an array of probe detunings
-    Parameters
-    ---------- 
-    delta_c : float
-        Coupling detuning in Hz.
-    dmin : float
-        Lower bound of Probe detuning in MHz
-    dmax : float
-        Upper bound of Probe detuning in MHz
-    steps : int
-        Number of Probe detunings to calculate the transmission at 
-
-    Returns
-    -------
-    T : plot
-        Plot of probe beam transmission against probe detuning, with EIT FWHM
-
-    """
-    global Omega_c
-    dlist1, tlist1 = tcalc(delta_c, dmin, dmax, steps)
-    OC = copy.deepcopy(Omega_c)
-    Omega_c = 0
-    dlist2, tlist2 = tcalc(delta_c, dmin, dmax, steps)
-    dlist = dlist1
-    tlist = tlist1-tlist2
-    Omega_c = OC
-    """ Plotting"""
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    """ Geometric library to calculate linewidth of EIT peak (FWHM) """
-    try:
-        pw = FWHM(dlist, tlist)
-        ax.text(0.5, 0.97, f"EIT peak FWHM = {pw/(2*np.pi):.2f} $MHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
-    except:
-        pass
-    
-    plt.title(r"Probe transmission against probe beam detuning")
-    ax.plot(dlist/1e6, tlist, color="orange", label="$\Omega_c=$" f"{Omega_c/1e6:.1f} $MHz$"\
-            "\n" "$\Omega_p=$" f"{Omega_p/1e6:.1f} $MHz$" "\n" "$\Gamma_{ri}$" f"= {gamma_ri/(1e3*2*np.pi):.2f} $KHz$" "\n" "$\Gamma_{ig}$" f"= {gamma_ig/(1e6*2*np.pi):.2f} $MHz$" "\n" "$A_{r}$" f" = {gamma_ri/1e4:.2f}"\
-                r" x $10^4s^{-1}$" "\n""$A_{i} =$"\
-                    f"{gamma_ig/1e6:.1f}" r" x $10^6s^{-1}$" "\n" "$\Delta_c =$" f"{delta_c/1e6:.1f} $MHz$" "\n" f"$\gamma_p$ = {lwp/1e6:.1f} $MHz$" "\n"\
-                        f"$\gamma_c$ = {lwc/1e6:.1f} $MHz$" "\n" f"Probe power = {pp*1e6:.1f} $\mu W$" "\n" f"Coupling power = {cp*1e3:.1f} $mW$")
-    ax.set_xlabel(r"$\Delta_p$ / $MHz$")
-    ax.set_ylabel(r"Reltaive Probe Transmission")
-    ax.legend()
-    plt.show()
+    return dlist, tlist    
     
 def FWHM(dlist, tlist):
     """
