@@ -5,7 +5,7 @@ Created on Sun Nov  1 15:51:34 2020
 
 @author: robgc
 """
-from tqdm import tqdm_gui
+from miniutils import parallel_progbar
 import qutip as qt
 qt.settings.auto_tidyup=False
 import numpy as np
@@ -32,7 +32,6 @@ transition_32 = state3*state2.dag() # intermediate to excited
 transition_23 = state2*state3.dag() # excited to intermediate
 
 """defining functions"""
-
 def hamiltonian(delta_p, delta_c, omega_p, omega_c):
     """
     This function defines the Hamiltonian of the 3 level system
@@ -274,28 +273,26 @@ def pop_calc(delta_c, omega_p, omega_c, spontaneous_32,
         Array of population probabilities corresponding to the detunings
 
     """
-    plist = np.empty(steps+1)
-    dlist = np.empty(steps+1)
-    d=(dmax-dmin)*(steps)**(-1)
+    iters = np.empty(steps+1, dtype=tuple)
+    dlist = np.linspace(dmin, dmax, steps+1)
     if gauss == "Y":
         mp = np.sqrt(3/2)*v_mp(temperature)
-        for i in tqdm_gui(range(0, steps+1)):
-            dlist[i] = dmin
-            plist[i] = np.abs(doppler_int(dmin, delta_c, omega_p, omega_c, 
-                                          spontaneous_32, spontaneous_21, 
-                                          lw_probe, lw_coupling, mp, 
-                                          kp, kc, state_index, beamdiv, 
-                                          temperature, probe_diameter, 
-                                          coupling_diameter, tt))
-            dmin+=d
+        for i in range(0, steps+1):
+            iters[i] = (dlist[i], delta_c, omega_p, omega_c, 
+                        spontaneous_32, spontaneous_21, 
+                        lw_probe, lw_coupling, mp, 
+                        kp, kc, state_index, beamdiv, 
+                        temperature, probe_diameter, 
+                        coupling_diameter, tt)
+        plist = np.abs(np.array(parallel_progbar(doppler_int, iters, starmap=True)))
     else:
-        for i in tqdm_gui(range(0, steps+1)):
-            dlist[i] = dmin
-            plist[i] = population(dmin, delta_c, omega_p, omega_c, 
-                                  spontaneous_32, spontaneous_21, lw_probe, 
-                                  lw_coupling, temperature, probe_diameter, 
-                                  coupling_diameter, tt)[state_index]
-            dmin+=d
+        for i in range(0, steps+1):
+            iters[i] = (dlist[i], delta_c, omega_p, omega_c, 
+                        spontaneous_32, spontaneous_21, lw_probe, 
+                        lw_coupling, temperature, probe_diameter, 
+                        coupling_diameter, tt)
+        plist = parallel_progbar(population, iters, starmap=True)
+        plist = np.array([x[state_index] for x in plist])
     return dlist, plist
 
 def pop_plot(state, delta_c, omega_p, omega_c, spontaneous_32, 
@@ -342,7 +339,7 @@ def pop_plot(state, delta_c, omega_p, omega_c, spontaneous_32,
                 "$\Delta_c =$" f"{delta_c/1e6:.2f} $Hz$" "\n" \
                 f"$\gamma_p$ = {lw_probe:.2e} $Hz$" "\n" 
                 f"$\gamma_c$ = {lw_coupling:.2e} $Hz$")
-        ax.set_xlabel(r"$\Delta_p$ / $2 \pi$ kHz")
+        ax.set_xlabel(r"$\Delta_p$ / $2 \pi$ MHz")
     else:
         ax.plot(dlist/(2e3*np.pi), plist, color="orange", label="$\Omega_c=$" f"{omega_c:.2e} $Hz$"\
                 "\n" "$\Omega_p=$" f"{omega_p:.2e} $Hz$" "\n" \
@@ -411,31 +408,27 @@ def tcalc(delta_c, omega_p, omega_c, spontaneous_32,
         Array of transmission values corresponding to the detunings
 
     """
-    
-    tlist = np.empty(steps+1)
-    dlist = np.empty(steps+1)
-    d=(dmax-dmin)*(steps)**(-1)
+    iters = np.empty(steps+1, dtype=tuple)
+    dlist = np.linspace(dmin, dmax, steps+1)
     if gauss == "Y":
         mp = np.sqrt(3/2)*v_mp(temperature)
         elem = 1,0
-        for i in tqdm_gui(range(0, steps+1)):
-            dlist[i] = dmin
-            rho_21_imag = doppler_int(dmin, delta_c, omega_p, omega_c, 
-                                      spontaneous_32, spontaneous_21, lw_probe, 
-                                      lw_coupling, mp, kp, kc, elem, beamdiv, 
-                                      temperature, probe_diameter, coupling_diameter, tt)
-            chi_imag = (-2*density*dig**2*rho_21_imag)/(hbar*epsilon_0*omega_p)
-            a = kp*np.abs(chi_imag)
-            tlist[i] = np.exp(-a*sl)
-            dmin+=d
+        for i in range(0, steps+1):
+            iters[i] = (dlist[i], delta_c, omega_p, omega_c, 
+                        spontaneous_32, spontaneous_21, lw_probe, 
+                        lw_coupling, mp, kp, kc, elem, beamdiv, 
+                        temperature, probe_diameter, coupling_diameter, tt)
+        rhos = np.array(parallel_progbar(doppler_int, iters, starmap=True))
+        chi_imag = (-2*density*dig**2*rhos)/(hbar*epsilon_0*omega_p)
+        a = kp*np.abs(chi_imag)
+        tlist = np.exp(-a*sl)
     else:
-        for i in tqdm_gui(range(0, steps+1)):
-            dlist[i] = dmin
-            tlist[i] = transmission(dmin, delta_c, omega_p, omega_c, 
-                                    spontaneous_32, spontaneous_21, lw_probe, 
-                                    lw_coupling, density, dig, kp, sl, temperature, 
-                                    probe_diameter, coupling_diameter, tt)
-            dmin+=d
+        for i in range(0, steps+1):
+            iters[i] = (dlist[i], delta_c, omega_p, omega_c, 
+                        spontaneous_32, spontaneous_21, lw_probe, 
+                        lw_coupling, density, dig, kp, sl, temperature, 
+                        probe_diameter, coupling_diameter, tt)
+        tlist = np.array(parallel_progbar(transmission, iters, starmap=True))
     return dlist, tlist
     
 def trans_plot(delta_c, omega_p, omega_c, spontaneous_32, 

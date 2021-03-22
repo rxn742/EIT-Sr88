@@ -12,7 +12,7 @@ from scipy.constants import hbar, e, epsilon_0,c, m_e
 d23_413 = np.sqrt((3*1.6e-4*hbar*413.3e-9*e**2)/(4*np.pi*m_e*c)) # r-i dipole matrix element
 d12_413 = 4.469788031e-29 # i-g dipole matrix element
 spontaneous_32_413 = 4e4 # Spontaneous emission rate from r to i
-spontaneous_21_413 = 2*np.pi*32e6#*0.99998 # Spontaneous emission rate from i to g
+spontaneous_21_413 = 2*np.pi*32e6*0.99998 # Spontaneous emission rate from i to g
 kp_413 = 2*np.pi/461e-9 # Probe wavevector in m^-1
 kc_413 = 2*np.pi/413e-9 # Coupling wavevector in m^-1
 
