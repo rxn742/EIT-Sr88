@@ -331,24 +331,24 @@ def pop_plot(state, delta_c, omega_p, omega_c, spontaneous_32,
     fig = plt.figure()
     ax = fig.add_subplot(111)
     plt.title(f"{state} population")
-    if dmax - dmin >= 2*np.pi*1e6:
-        ax.plot(dlist/(2e6*np.pi), plist, color="orange", label="$\Omega_c=$" f"{omega_c:.2e} $Hz$"\
+    if dmax - dmin >= 1e6:
+        ax.plot(dlist/(1e6), plist, color="orange", label="$\Omega_c=$" f"{omega_c:.2e} $Hz$"\
                 "\n" "$\Omega_p=$" f"{omega_p:.2e} $Hz$" "\n" \
                 "$\Gamma_{c}$" f"= {spontaneous_32/(2*np.pi):.2e} $Hz$" "\n" \
                 "$\Gamma_{p}$" f"= {spontaneous_21/(2*np.pi):.2e} $Hz$" "\n"\
                 "$\Delta_c =$" f"{delta_c/1e6:.2f} $Hz$" "\n" \
                 f"$\gamma_p$ = {lw_probe:.2e} $Hz$" "\n" 
                 f"$\gamma_c$ = {lw_coupling:.2e} $Hz$")
-        ax.set_xlabel(r"$\Delta_p$ / $2 \pi$ MHz")
+        ax.set_xlabel(r"$\Delta_p$ / MHz")
     else:
-        ax.plot(dlist/(2e3*np.pi), plist, color="orange", label="$\Omega_c=$" f"{omega_c:.2e} $Hz$"\
+        ax.plot(dlist/(1e3), plist, color="orange", label="$\Omega_c=$" f"{omega_c:.2e} $Hz$"\
                 "\n" "$\Omega_p=$" f"{omega_p:.2e} $Hz$" "\n" \
                 "$\Gamma_{c}$" f"= {spontaneous_32/(2*np.pi):.2e} $Hz$" "\n" \
                 "$\Gamma_{p}$" f"= {spontaneous_21/(2*np.pi):.2e} $Hz$" "\n"\
                 "$\Delta_c =$" f"{delta_c/1e6:.2f} $Hz$" "\n" \
                 f"$\gamma_p$ = {lw_probe:.2e} $Hz$" "\n" 
                 f"$\gamma_c$ = {lw_coupling:.2e} $Hz$")
-        ax.set_xlabel(r"$\Delta_p$ / $2 \pi$ kHz")
+        ax.set_xlabel(r"$\Delta_p$ / kHz")
     ax.set_ylabel(f"{state} state popultaion")
     ax.legend()
     plt.show()
@@ -412,6 +412,7 @@ def tcalc(delta_c, omega_p, omega_c, spontaneous_32,
     dlist = np.linspace(dmin, dmax, steps+1)
     if gauss == "Y":
         mp = np.sqrt(3/2)*v_mp(temperature)
+        print(mp)
         elem = 1,0
         for i in range(0, steps+1):
             iters[i] = (dlist[i], delta_c, omega_p, omega_c, 
@@ -465,33 +466,33 @@ def trans_plot(delta_c, omega_p, omega_c, spontaneous_32,
     try:
         pw = FWHM(dlist, tlist)
         ct = contrast(dlist, tlist)
-        if dmax-dmin >= 2*np.pi*1e6:
-            ax.text(0.5, 0.97, f"EIT peak FWHM = {pw/(2*np.pi):.2f} $MHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
+        if dmax-dmin >= 1e6:
+            ax.text(0.5, 0.97, f"EIT peak FWHM = {pw:.2f} $MHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
         else:
-            ax.text(0.5, 0.97, f"EIT peak FWHM = {pw/(2*np.pi):.2f} $kHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
+            ax.text(0.5, 0.97, f"EIT peak FWHM = {pw:.2f} $kHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
         ax.text(0.5, 0.87, f"EIT Contrast = {ct:.2e}", transform=ax.transAxes, fontsize=10, va='center', ha='center')        
     except:
         pass
     
     plt.title(r"Probe transmission against probe beam detuning")
-    if dmax-dmin >= 2*np.pi*1e6:
-        ax.plot(dlist/(1e6*2*np.pi), tlist, color="orange", label="$\Omega_c=$" f"{omega_c:.2e} $Hz$"\
+    if dmax-dmin >= 1e6:
+        ax.plot(dlist/(1e6), tlist, color="orange", label="$\Omega_c=$" f"{omega_c:.2e} $Hz$"\
                 "\n" "$\Omega_p=$" f"{omega_p:.2e} $Hz$" "\n" \
                 "$\Gamma_{c}$" f"= {spontaneous_32/(2*np.pi):.2e} $Hz$" "\n" \
                 "$\Gamma_{p}$" f"= {spontaneous_21/(2*np.pi):.2e} $Hz$" "\n"\
                 "$\Delta_c =$" f"{delta_c/1e6:.2f} $Hz$" "\n" \
                 f"$\gamma_p$ = {lw_probe:.2e} $Hz$" "\n" 
                 f"$\gamma_c$ = {lw_coupling:.2e} $Hz$")
-        ax.set_xlabel(r"$\Delta_p$ / $2 \pi$ MHz")
+        ax.set_xlabel(r"$\Delta_p$ / MHz")
     else:
-        ax.plot(dlist/(1e3*2*np.pi), tlist, color="orange", label="$\Omega_c=$" f"{omega_c:.2e} $Hz$"\
+        ax.plot(dlist/(1e3), tlist, color="orange", label="$\Omega_c=$" f"{omega_c:.2e} $Hz$"\
                 "\n" "$\Omega_p=$" f"{omega_p:.2e} $Hz$" "\n" \
                 "$\Gamma_{c}$" f"= {spontaneous_32/(2*np.pi):.2e} $Hz$" "\n" \
                 "$\Gamma_{p}$" f"= {spontaneous_21/(2*np.pi):.2e} $Hz$" "\n"\
                 "$\Delta_c =$" f"{delta_c/1e6:.2f} $Hz$" "\n" \
                 f"$\gamma_p$ = {lw_probe:.2e} $Hz$" "\n" 
                 f"$\gamma_c$ = {lw_coupling:.2e} $Hz$")
-        ax.set_xlabel(r"$\Delta_p$ / $2 \pi$ kHz")
+        ax.set_xlabel(r"$\Delta_p$ / kHz")
     ax.set_ylabel(r"Probe Transmission")
     ax.legend()
     plt.show()
