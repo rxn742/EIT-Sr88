@@ -5,6 +5,7 @@ Created on Wed Feb 24 15:00:06 2021
 
 @author: robgc
 """
+from multiprocessing import set_start_method
 import csv
 import sys
 from PyQt5.QtCore import *
@@ -222,9 +223,6 @@ class UI(QMainWindow):
         if vals["cd"] == 0:
         	tt = "N"
         
-        print(vals["omega_p"]/1e6)
-        print(vals["omega_c"]/1e6)
-        
         if self.system_choice.currentIndex() == 0:
             trans_plot(vals["delta_c"], vals["omega_p"], vals["omega_c"], spontaneous_32_413, spontaneous_21_413, 
                        vals["lwp"], vals["lwc"], vals["dmin"], vals["dmax"], vals["steps"], gauss, kp_413, kc_413, 
@@ -392,4 +390,5 @@ def main():
     sys.exit(app.exec_())
     
 if __name__ == "__main__":
+    set_start_method("spawn")
     main()
