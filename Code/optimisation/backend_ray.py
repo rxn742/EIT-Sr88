@@ -5,7 +5,8 @@ Created on Sun Nov  1 15:51:34 2020
 
 @author: robgc
 """
-from miniutils import parallel_progbar
+from tqdm import tqdm
+import ray
 import qutip as qt
 qt.settings.auto_tidyup=False
 import numpy as np
@@ -177,7 +178,7 @@ def population(delta_p, delta_c, omega_p, omega_c, spontaneous_32, spontaneous_2
     rho = qt.steadystate(Liouvillian(delta_p, delta_c, omega_p, omega_c, 
                                      spontaneous_32, spontaneous_21, lw_probe, 
                                      lw_coupling, temperature, probe_diameter, coupling_diameter, tt))
-    return rho
+    return np.array(rho)
 
 def doppler(v, delta_p, delta_c, omega_p, omega_c, spontaneous_32,
             spontaneous_21, lw_probe, lw_coupling, mp, kp, kc, state_index, 
@@ -215,6 +216,7 @@ def doppler(v, delta_p, delta_c, omega_p, omega_c, spontaneous_32,
         temperature, probe_diameter, coupling_diameter, tt)[state_index]*maxwell_trans(v, mp))
     return integrand
 
+@ray.remote
 def doppler_int(delta_p, delta_c, omega_p, omega_c, spontaneous_32, 
                spontaneous_21, lw_probe, lw_coupling, mp, kp, kc, state_index, beamdiv, 
                temperature, probe_diameter, coupling_diameter, tt):
@@ -273,26 +275,36 @@ def pop_calc(delta_c, omega_p, omega_c, spontaneous_32,
         Array of population probabilities corresponding to the detunings
 
     """
-    iters = np.empty(steps+1, dtype=tuple)
     dlist = np.linspace(dmin, dmax, steps+1)
+    
+    def to_iterator(futures):
+        while futures:
+            done, futures = ray.wait(futures)
+            yield ray.get(done[0])
+
     if gauss == "Y":
         mp = np.sqrt(3/2)*v_mp(temperature)
-        for i in range(0, steps+1):
-            iters[i] = (dlist[i], delta_c, omega_p, omega_c, 
+        futures = [doppler_int.remote(d, delta_c, omega_p, omega_c, 
                         spontaneous_32, spontaneous_21, 
                         lw_probe, lw_coupling, mp, 
                         kp, kc, state_index, beamdiv, 
                         temperature, probe_diameter, 
-                        coupling_diameter, tt)
-        plist = np.abs(np.array(parallel_progbar(doppler_int, iters, starmap=True)))
+                        coupling_diameter, tt) for d in dlist]
+        for x in tqdm(to_iterator(futures), total=len(futures)):
+            pass
+        plist = np.array(ray.get(futures))
+    
     else:
-        for i in range(0, steps+1):
-            iters[i] = (dlist[i], delta_c, omega_p, omega_c, 
-                        spontaneous_32, spontaneous_21, lw_probe, 
-                        lw_coupling, temperature, probe_diameter, 
-                        coupling_diameter, tt)
-        plist = parallel_progbar(population, iters, starmap=True)
-        plist = np.array([x[state_index] for x in plist])
+
+        pop_remote = ray.remote(population)
+        futures = [pop_remote.remote(d, delta_c, omega_p, omega_c, spontaneous_32, 
+            spontaneous_21, lw_probe, lw_coupling, temperature, probe_diameter, 
+            coupling_diameter, tt) for d in dlist]
+        for x in tqdm(to_iterator(futures), total=len(futures)):
+            pass
+        plist = np.array(ray.get(futures))
+        plist = np.real(np.array([x[state_index] for x in plist]))
+
     return dlist, plist
 
 def pop_plot(state, delta_c, omega_p, omega_c, spontaneous_32, 
@@ -353,6 +365,7 @@ def pop_plot(state, delta_c, omega_p, omega_c, spontaneous_32,
     ax.legend()
     plt.show()
 
+@ray.remote
 def transmission(delta_p, delta_c, omega_p, omega_c, spontaneous_32, 
                  spontaneous_21, lw_probe, lw_coupling, density, dig, kp, sl, 
                  temperature, probe_diameter, coupling_diameter, tt):
@@ -408,28 +421,34 @@ def tcalc(delta_c, omega_p, omega_c, spontaneous_32,
         Array of transmission values corresponding to the detunings
 
     """
-    iters = np.empty(steps+1, dtype=tuple)
     dlist = np.linspace(dmin, dmax, steps+1)
+    
+    def to_iterator(futures):
+        while futures:
+            done, futures = ray.wait(futures)
+            yield ray.get(done[0])
+    
     if gauss == "Y":
         mp = np.sqrt(3/2)*v_mp(temperature)
-        print(mp)
         elem = 1,0
-        for i in range(0, steps+1):
-            iters[i] = (dlist[i], delta_c, omega_p, omega_c, 
+        futures = [doppler_int.remote(d, delta_c, omega_p, omega_c, 
                         spontaneous_32, spontaneous_21, lw_probe, 
                         lw_coupling, mp, kp, kc, elem, beamdiv, 
-                        temperature, probe_diameter, coupling_diameter, tt)
-        rhos = np.array(parallel_progbar(doppler_int, iters, starmap=True))
+                        temperature, probe_diameter, coupling_diameter, tt) for d in dlist]
+        for x in tqdm(to_iterator(futures), total=len(futures)):
+            pass
+        rhos = np.array(ray.get(futures))
         chi_imag = (-2*density*dig**2*rhos)/(hbar*epsilon_0*omega_p)
         a = kp*np.abs(chi_imag)
         tlist = np.exp(-a*sl)
     else:
-        for i in range(0, steps+1):
-            iters[i] = (dlist[i], delta_c, omega_p, omega_c, 
+        futures = [transmission.remote(d, delta_c, omega_p, omega_c, 
                         spontaneous_32, spontaneous_21, lw_probe, 
                         lw_coupling, density, dig, kp, sl, temperature, 
-                        probe_diameter, coupling_diameter, tt)
-        tlist = np.array(parallel_progbar(transmission, iters, starmap=True))
+                        probe_diameter, coupling_diameter, tt) for d in dlist]
+        for x in tqdm(to_iterator(futures), total=len(futures)):
+            pass
+        tlist = np.array(ray.get(futures))
     return dlist, tlist
     
 def trans_plot(delta_c, omega_p, omega_c, spontaneous_32, 
@@ -561,12 +580,3 @@ def maxwell_trans(v, mp):
 
 def effectiveT(mp):
     return ((mp**2*(88*1.6605390666e-27))/(2*k))
-
-#if __name__ == "__main__":
-    #import time
-    #start = time.time()
-    #trans_plot(0, 5e6, 15e6, 4e4, 
-    #         32e6*2*np.pi, 1e6, 1e6, -314e6, 314e6, 1000, 
-    #         "Y", 2*np.pi/461e-9, 2*np.pi/413e-9, 1e15, 4.469788031e-29, 3e-3, 623.15, 38e-3, 
-    #         1, 1, "N")
-    #print(time.time()-start)
