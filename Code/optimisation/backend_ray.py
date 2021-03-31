@@ -290,8 +290,8 @@ def pop_calc(delta_c, omega_p, omega_c, spontaneous_32,
                         kp, kc, state_index, beamdiv, 
                         temperature, probe_diameter, 
                         coupling_diameter, tt) for d in dlist]
-        for x in tqdm(to_iterator(futures), total=len(futures)):
-            pass
+        #for x in tqdm(to_iterator(futures), total=len(futures)):
+        #    pass
         plist = np.array(ray.get(futures))
     
     else:
@@ -300,8 +300,8 @@ def pop_calc(delta_c, omega_p, omega_c, spontaneous_32,
         futures = [pop_remote.remote(d, delta_c, omega_p, omega_c, spontaneous_32, 
             spontaneous_21, lw_probe, lw_coupling, temperature, probe_diameter, 
             coupling_diameter, tt) for d in dlist]
-        for x in tqdm(to_iterator(futures), total=len(futures)):
-            pass
+        #for x in tqdm(to_iterator(futures), total=len(futures)):
+        #    pass
         plist = np.array(ray.get(futures))
         plist = np.real(np.array([x[state_index] for x in plist]))
 
