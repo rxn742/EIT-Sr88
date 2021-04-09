@@ -3,7 +3,7 @@ from sys import path
 path.insert(0, "../GUI")
 import ray
 from scipy.signal import find_peaks
-from backend_ray import pop_calc
+from backend_ray import pop_calc, tcalc, FWHM, contrast
 import time
 from copy import deepcopy
 
@@ -51,9 +51,28 @@ class optimise:
             else:
                 raise Error("Enter optimisation variables as strings")
         self.variables = variables
-        self.constants = ["spontaneous_21", "spontaneous_32", "kp", "kc", "d12", "d23"]
+        self.constants = ["spontaneous_21", "spontaneous_32", "kp", "kc", "dig", "dri"]
         self.class_kwargs = kwargs
 
+    def EIT(self, **kwargs):
+        required_vars = list(tcalc.__code__.co_varnames[:tcalc.__code__.co_argcount])
+        dic = {**self.class_kwargs, **kwargs}
+        
+        for i in required_vars:
+            if i not in dic.keys():
+                if i not in self.constants:
+                        raise Error(f"Keyword argumemt {i} has not been defined")
+        
+        dlist, tlist = tcalc(dic["delta_c"], dic["omega_p"], dic["omega_c"], self.spontaneous_32, 
+                                    self.spontaneous_21, dic["lw_probe"], dic["lw_coupling"], dic["dmin"], 
+                                    dic["dmax"], dic["steps"], dic["gauss"], self.kp, self.kc, dic['density'], 
+                                    self.d12, dic['sl'], dic["temperature"], dic["beamdiv"], 
+                                    dic["probe_diameter"], dic["coupling_diameter"], dic["tt"])
+        
+        lw = FWHM(dlist, tlist)
+        ct = contrast(dlist, tlist)
+        return lw, ct
+                        
     def Rydberg_pop(self, **kwargs):
         required_vars = list(pop_calc.__code__.co_varnames[:pop_calc.__code__.co_argcount])
         dic = {**self.class_kwargs, **kwargs}
@@ -127,17 +146,24 @@ class optimise:
     
         c = 0
         while self.step > 10:
+            print(self.points)
             c += 1
             f = -self.Rydberg_pop(**self.points)
-            #print(f)
+            print(f"f = {f}")
             self.test_points = self.exploration(self.points)
             fe = -self.Rydberg_pop(**self.test_points)
-            if fe < f:                
+            print(f"fe ={fe}")
+            if fe < f:
+                print("Explored value is better")                
                 for i in self.points:
                     self.vector[i] = self.points[i]+2*(self.test_points[i]-self.points[i])
-                self.points = self.exploration(self.vector)
-                fe = -self.Rydberg_pop(**self.points)
-                #print(f"fe = {fe}")
+                self.pattern_points = self.exploration(self.vector)
+                fp = -self.Rydberg_pop(**self.pattern_points)
+                print(f"fp pattern step = {fp}")
+                if fp < fe:
+                    self.points = self.pattern_points
+                else:
+                    self.points = self.test_points
             if self.points == self.test_points:
                 self.step = self.step/10 # reduces the step size
                 self.points = self.exploration(self.points)
@@ -161,7 +187,7 @@ class optimise:
             raise Error("Bisection is only valid in 1D")
         key = list(self.variables.keys())[0]
         
-        while b-a > 10:
+        while b-a > 100:
             params = {key:a}
             f_a = self.Rydberg_pop(**params)
             params = {key:b}
@@ -180,21 +206,125 @@ class optimise:
             mv = k.index(k_max) # finds the maximum value of the metric
             if mv == 0:
                 b = m
-                #print(a, k_max, b-a)
+                print(a, k_max, b-a)
             if mv == 4:
                 b = m
-                #print(l, k_max, b-a)
+                print(l, k_max, b-a)
             if mv == 1:
                 a = m
-                #print(b, k_max, b-a)
+                print(b, k_max, b-a)
             if mv == 3:
                 a = m
-                #print(r, k_max, b-a)            
+                print(r, k_max, b-a)            
             if mv == 2:
                 a = l
                 b = r
-                #print(m, k_max, b-a)        
+                print(m, k_max, b-a)        
         return a
+
+    def cm_init(self, EIT, **kwargs):
+        self.linewidth = 2
+        keys = list(self.variables.keys())
+        for i in keys:
+            if i not in kwargs.keys():
+                raise Error("All parameters require a starting value")
+        count = 1
+        self.x1 = kwargs
+        if self.cm_max(**self.x1) and self.cm_constraints(**self.x1):
+            pass
+        else:
+            raise Error("Original point does not meet the contstraints")
+        self.xc = {"1":self.x1}
+        self.fns = {"1":-self.Rydberg_pop(**kwargs)}
+        
+        while count < 4:
+            self.xi = {}
+            count+=1
+            feasible = False
+            while feasible == False:    
+                for j in self.x1:
+                    self.xi[j] = np.random.uniform()*self.maximums[j]
+                
+                if self.cm_constraints(**self.xi):
+                    feasible = True
+                else:
+                    for j in self.xi:
+                        self.xi[j] = 1/2*(self.xi[j] + self.xc["1"][j])
+                    
+            self.xc[f"{count}"] = self.xi
+            self.fns[f"{count}"] = -self.Rydberg_pop(**self.xi)
+
+        return self.xc, self.fns
+    
+    def cm_iter(self, EIT="no", alpha=1, **kwargs):
+        cplex, F = self.cm_init(EIT, **kwargs)
+        std_dev = 1
+        while std_dev > 1e-5:
+            max_key = max(F, key=self.fns.get)
+            xh = cplex.pop(max_key)
+            fn_max = F.pop(max_key)
+            oc_centroid = np.array([cplex[i]["omega_c"] for i in cplex]).mean()
+            op_centroid = np.array([cplex[i]["omega_p"] for i in cplex]).mean()
+            xo = {"omega_p":op_centroid, "omega_c":oc_centroid}
+            xr = {}
+            for k in xh:
+                xr[k] = (1+alpha)*xo[k] - alpha*xh[k]
+            feasible = False
+            while feasible == False:
+                if self.cm_max(**xr):
+                    if self.cm_constraints(**xr):
+                        fn_reflect = -self.Rydberg_pop(**xr)
+                        if fn_reflect < fn_max:
+                            feasible = True
+                            xh = xr
+                            cplex[max_key] = xh
+                            F[max_key] = fn_reflect
+                        else:
+                            for j in xr:
+                                xr[j] = 1/2*(xo[j]+xr[j])
+                    else:
+                        for j in xr:
+                            xr[j] = 1/2*(xo[j]+xr[j])   
+                else:
+                    for j in xr:
+                        if self.maximums[j] < xr[j]:
+                            xr[j] = self.maximums[j] - 1e-6
+                    if self.cm_constraints(**xr):
+                        for j in xr:
+                            xr[j] = 1/2*(xo[j]+xr[j])
+            
+            std_dev = np.array([F[i] for i in F]).std()
+            #vals = list(cplex.values())
+            fvals = list(F.values())
+            print(f"Function = {fvals}")
+            print("\n")
+        
+        min_key = min(F, key=self.fns.get)
+        xe = cplex.pop(min_key)
+        fn_min = self.Rydberg_pop(**xe)
+        print(f'Rydberg population = {fn_min*100:.1f}% \nOmega_p = {xe["omega_p"]:.1e} Hz \nOmega_c = {xe["omega_c"]:.1e} Hz')
+        return
+
+    def cm_max(self, **kwargs):
+        self.maximums = {}
+        self.maximums["omega_p"] = 30e6
+        self.maximums["omega_c"] = 30e6
+        if all(self.maximums[j] > kwargs[j] for j in kwargs):
+            return True
+        else:
+            return False
+    
+    def cm_constraints(self, **kwargs):
+        self.linewidth = 5e6
+        self.contrast = 0.01
+        #print(self.EIT(**kwargs))
+        if self.EIT(**kwargs)[0] < self.linewidth and self.EIT(**kwargs)[1] > self.contrast and kwargs["omega_c"] > 3*kwargs["omega_p"]:
+            return True
+        else:
+            return False
+        
+        
+        
 
 if __name__ == "__main__":
     ray.shutdown()
@@ -205,10 +335,10 @@ if __name__ == "__main__":
     #result = bisection(1e6, 40e6, delta_c=0, omega_p=10e6, lw_probe=1e5, lw_coupling=1e5, dmin=-100e6, dmax=100e6, steps=1000, gauss="N", temperature=623.15, beamdiv=38e-3, probe_diameter=1, coupling_diameter=1, tt="N")
     #print(result)
     #ray.shutdown()
-    op = optimise("singlet", "Rydberg", "omega_c", delta_c=0, omega_p=10e6, lw_probe=1e5, lw_coupling=1e5, dmin=-50e6, dmax=50e6, steps=100, gauss="N", temperature=623.15, beamdiv=38e-3, probe_diameter=1, coupling_diameter=1, tt="N")
-    op.bisection1D(1e6, 40e6)
-    op.pattern_search(omega_c=15e6)
-
+    op = optimise("singlet", "Rydberg", "omega_c", delta_c=0, omega_p=30e6, lw_probe=1e5, lw_coupling=1e5, dmin=-50e6, dmax=50e6, steps=100, gauss="N", temperature=623.15, beamdiv=38e-3, probe_diameter=1, coupling_diameter=1, tt="N", density=1e15, sl=3e-3)
+    #op.bisection1D(1e6, 30e6)
+    #op.pattern_search(omega_c=15e6, omega_p=5e6)
+    op.cm_iter(EIT="yes", omega_c=16e6, omega_p=5e6)
 
 
 

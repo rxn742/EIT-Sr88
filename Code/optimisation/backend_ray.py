@@ -5,7 +5,7 @@ Created on Sun Nov  1 15:51:34 2020
 
 @author: robgc
 """
-from tqdm import tqdm
+#from tqdm import tqdm
 import ray
 import qutip as qt
 qt.settings.auto_tidyup=False
@@ -14,7 +14,6 @@ from scipy.constants import hbar, epsilon_0, k
 import matplotlib.pyplot as plt
 from scipy.integrate import quad
 from scipy.signal import find_peaks, peak_widths, peak_prominences
-from shapely.geometry import LineString
 
 """defining the states"""
 state1 = qt.basis(3,0) # ground state
@@ -180,6 +179,11 @@ def population(delta_p, delta_c, omega_p, omega_c, spontaneous_32, spontaneous_2
                                      lw_coupling, temperature, probe_diameter, coupling_diameter, tt))
     return np.array(rho)
 
+@ray.remote
+def pop_remote(delta_p, delta_c, omega_p, omega_c, spontaneous_32, spontaneous_21,
+               lw_probe, lw_coupling, temperature, probe_diameter, coupling_diameter, tt):
+    return population(delta_p, delta_c, omega_p, omega_c, spontaneous_32, spontaneous_21, lw_probe, lw_coupling, temperature, probe_diameter, coupling_diameter, tt)
+
 def doppler(v, delta_p, delta_c, omega_p, omega_c, spontaneous_32,
             spontaneous_21, lw_probe, lw_coupling, mp, kp, kc, state_index, 
             temperature, probe_diameter, coupling_diameter, tt):
@@ -295,8 +299,6 @@ def pop_calc(delta_c, omega_p, omega_c, spontaneous_32,
         plist = np.array(ray.get(futures))
     
     else:
-
-        pop_remote = ray.remote(population)
         futures = [pop_remote.remote(d, delta_c, omega_p, omega_c, spontaneous_32, 
             spontaneous_21, lw_probe, lw_coupling, temperature, probe_diameter, 
             coupling_diameter, tt) for d in dlist]
@@ -435,8 +437,8 @@ def tcalc(delta_c, omega_p, omega_c, spontaneous_32,
                         spontaneous_32, spontaneous_21, lw_probe, 
                         lw_coupling, mp, kp, kc, elem, beamdiv, 
                         temperature, probe_diameter, coupling_diameter, tt) for d in dlist]
-        for x in tqdm(to_iterator(futures), total=len(futures)):
-            pass
+        #for x in tqdm(to_iterator(futures), total=len(futures)):
+        #    pass
         rhos = np.array(ray.get(futures))
         chi_imag = (-2*density*dig**2*rhos)/(hbar*epsilon_0*omega_p)
         a = kp*np.abs(chi_imag)
@@ -446,8 +448,8 @@ def tcalc(delta_c, omega_p, omega_c, spontaneous_32,
                         spontaneous_32, spontaneous_21, lw_probe, 
                         lw_coupling, density, dig, kp, sl, temperature, 
                         probe_diameter, coupling_diameter, tt) for d in dlist]
-        for x in tqdm(to_iterator(futures), total=len(futures)):
-            pass
+        #for x in tqdm(to_iterator(futures), total=len(futures)):
+        #    pass
         tlist = np.array(ray.get(futures))
     return dlist, tlist
     
@@ -485,11 +487,8 @@ def trans_plot(delta_c, omega_p, omega_c, spontaneous_32,
     try:
         pw = FWHM(dlist, tlist)
         ct = contrast(dlist, tlist)
-        if dmax-dmin >= 1e6:
-            ax.text(0.5, 0.97, f"EIT peak FWHM = {pw:.2f} $MHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
-        else:
-            ax.text(0.5, 0.97, f"EIT peak FWHM = {pw:.2f} $kHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
-        ax.text(0.5, 0.87, f"EIT Contrast = {ct:.2e}", transform=ax.transAxes, fontsize=10, va='center', ha='center')        
+        ax.text(0.5, 0.97, f"EIT peak FWHM = {pw:.2e} $Hz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')     
+        ax.text(0.5, 0.93, f"EIT Contrast = {ct:.2f}", transform=ax.transAxes, fontsize=10, va='center', ha='center')        
     except:
         pass
     
@@ -516,6 +515,7 @@ def trans_plot(delta_c, omega_p, omega_c, spontaneous_32,
     ax.legend()
     plt.show()
     
+
 def FWHM(dlist, tlist):
     """
     This function calculates the FWHM of the EIT peak in a spectrum
@@ -531,43 +531,14 @@ def FWHM(dlist, tlist):
 
     """
     peak = find_peaks(tlist, distance = 999)[0]
-    width = peak_widths(tlist, peak)
-    height = width[1]
-    if dlist[-1] - dlist[0] >= 2*np.pi*1e6:
-        first_line = LineString(np.column_stack((dlist/1e6, np.full(len(tlist), height))))
-        second_line = LineString(np.column_stack((dlist/1e6, tlist)))
-    else:
-        first_line = LineString(np.column_stack((dlist/1e3, np.full(len(tlist), height))))
-        second_line = LineString(np.column_stack((dlist/1e3, tlist)))
-    intersection = first_line.intersection(second_line)
-    ints = []
-    for i in intersection:
-        ints.append(i.x)
-    ints = np.array(ints)
-    if len(ints) == 3:
-        amax = np.argmax(np.abs(ints))
-        ints = np.delete(ints, amax)
-    if len(ints) == 4:
-        amax = np.argmax(np.abs(ints))
-        ints = np.delete(ints, amax)
-        amax = np.argmax(np.abs(ints))
-        ints = np.delete(ints, amax)
-    i1 = ints[0]
-    i2 = ints[1]
-    if i1 == 0.0:
-        pw = np.abs(i2)
-    if i1 == 0.0:
-        pw = np.abs(i2)
-    if i1 < 0 :
-        pw = np.abs(i1-i2)
-    if i1 > 0:
-        pw = i2-i1
-    return pw
+    sample = dlist[1]-dlist[0]
+    width = peak_widths(tlist, peak)[0]*sample
+    return width[0]
 
 def contrast(dlist, tlist):
     peak = find_peaks(tlist, distance = 999)[0]
     contrast = peak_prominences(tlist, peak)
-    return contrast[0]
+    return contrast[0][0]
 
 def v_mp(T):
     return np.sqrt(2*k*(T)/(88*1.6605390666e-27))
