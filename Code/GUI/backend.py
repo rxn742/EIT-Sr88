@@ -351,6 +351,7 @@ def pop_plot(state, delta_c, omega_p, omega_c, spontaneous_32,
     ax.set_ylabel(f"{state} state popultaion")
     ax.legend()
     plt.show()
+    return dlist, plist
 
 def transmission(delta_p, delta_c, omega_p, omega_c, spontaneous_32, 
                  spontaneous_21, lw_probe, lw_coupling, density, dig, kp, sl, 
@@ -465,10 +466,17 @@ def trans_plot(delta_c, omega_p, omega_c, spontaneous_32,
     try:
         pw = FWHM(dlist, tlist)
         ct = contrast(dlist, tlist)
-        ax.text(0.5, 0.97, f"EIT peak FWHM = {pw:.1e} $Hz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
+        if pw < 2*np.pi*1e6:
+            ax.text(0.5, 0.97, f"EIT peak FWHM = 2$\pi$ x {pw/(1e3*2*np.pi):.2f} $kHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
+        else:
+            ax.text(0.5, 0.97, f"EIT peak FWHM = 2$\pi$ x {pw/(1e6*2*np.pi):.2f} $MHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
         ax.text(0.5, 0.93, f"EIT Contrast = {ct:.2f}", transform=ax.transAxes, fontsize=10, va='center', ha='center')        
     except:
-        pass
+        pw = FWHM(dlist, -tlist)
+        if pw < 2*np.pi*1e6:
+            ax.text(0.5, 0.97, f"Background FWHM = 2$\pi$ x {pw/(1e3*2*np.pi):.2f} $kHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
+        else:
+            ax.text(0.5, 0.97, f"Background FWHM = 2$\pi$ x {pw/(1e6*2*np.pi):.2f} $MHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')       
     
     plt.title(r"Probe transmission against probe beam detuning")
     if dmax-dmin >= 1e6:
@@ -492,6 +500,7 @@ def trans_plot(delta_c, omega_p, omega_c, spontaneous_32,
     ax.set_ylabel(r"Probe Transmission")
     ax.legend()
     plt.show()
+    return dlist, tlist
     
 def FWHM(dlist, tlist):
     """
@@ -528,12 +537,3 @@ def maxwell_trans(v, mp):
 
 def effectiveT(mp):
     return ((mp**2*(88*1.6605390666e-27))/(2*k))
-
-#if __name__ == "__main__":
-    #import time
-    #start = time.time()
-    #trans_plot(0, 5e6, 15e6, 4e4, 
-    #         32e6*2*np.pi, 1e6, 1e6, -314e6, 314e6, 1000, 
-    #         "Y", 2*np.pi/461e-9, 2*np.pi/413e-9, 1e15, 4.469788031e-29, 3e-3, 623.15, 38e-3, 
-    #         1, 1, "N")
-    #print(time.time()-start)

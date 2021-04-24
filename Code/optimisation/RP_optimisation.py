@@ -4,7 +4,6 @@ path.insert(0, "../GUI")
 import ray
 from scipy.signal import find_peaks
 from backend_ray import pop_calc, tcalc, FWHM, contrast
-import time
 from copy import deepcopy
 
 class Error(Exception):
@@ -69,7 +68,10 @@ class optimise:
                                     self.d12, dic['sl'], dic["temperature"], dic["beamdiv"], 
                                     dic["probe_diameter"], dic["coupling_diameter"], dic["tt"])
         
-        lw = FWHM(dlist, tlist)
+        try:
+        	lw = FWHM(dlist, tlist)
+        except:
+        	lw = 0
         ct = contrast(dlist, tlist)
         return lw, ct
                         
@@ -315,10 +317,10 @@ class optimise:
             return False
     
     def cm_constraints(self, **kwargs):
-        self.linewidth = 5e6
+        self.linewidth = 3e6
         self.contrast = 0.01
         #print(self.EIT(**kwargs))
-        if self.EIT(**kwargs)[0] < self.linewidth and self.EIT(**kwargs)[1] > self.contrast and kwargs["omega_c"] > 3*kwargs["omega_p"]:
+        if self.EIT(**kwargs)[0] < self.linewidth and self.EIT(**kwargs)[1] > self.contrast and kwargs["omega_c"] > 2*kwargs["omega_p"]:
             return True
         else:
             return False
@@ -338,7 +340,7 @@ if __name__ == "__main__":
     op = optimise("singlet", "Rydberg", "omega_c", delta_c=0, omega_p=30e6, lw_probe=1e5, lw_coupling=1e5, dmin=-50e6, dmax=50e6, steps=100, gauss="N", temperature=623.15, beamdiv=38e-3, probe_diameter=1, coupling_diameter=1, tt="N", density=1e15, sl=3e-3)
     #op.bisection1D(1e6, 30e6)
     #op.pattern_search(omega_c=15e6, omega_p=5e6)
-    op.cm_iter(EIT="yes", omega_c=16e6, omega_p=5e6)
+    op.cm_iter(omega_c=16e6, omega_p=5e6)
 
 
 

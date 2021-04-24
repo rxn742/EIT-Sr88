@@ -16,6 +16,7 @@ from vals_413 import d12_413, d23_413, spontaneous_21_413, spontaneous_32_413, k
                         func_Ic_413, func_Ip_413, func_omega_c_413, func_omega_p_413
 from vals_318 import d12_318, d23_318, spontaneous_21_318, spontaneous_32_318, kp_318, kc_318, \
                         func_Ic_318, func_Ip_318, func_omega_c_318, func_omega_p_318
+import time
 
 
 class UI(QMainWindow):
@@ -24,7 +25,7 @@ class UI(QMainWindow):
         super(UI, self).__init__(*args, **kwargs)
         self.setWindowTitle("Sr88 3 Level System Simulator")
         self.screen = QDesktopWidget().screenGeometry(-1)
-        self.setFixedSize(int(self.screen.height()*0.9), self.screen.height()-100)
+        #self.setFixedSize(int(self.screen.height()*0.9), self.screen.height()-100)
         self.overallLayout = QHBoxLayout()
         self.leftLayout = QVBoxLayout()
         self.rightLayout = QVBoxLayout()
@@ -63,6 +64,10 @@ class UI(QMainWindow):
         self.pop_button.setStatusTip("Plot Population")
         self.toolbar.addAction(self.pop_button)
         self.pop_button.triggered.connect(self.population)
+        self.exit_button = QAction("Exit", self)
+        self.exit_button.setStatusTip("Exit")
+        self.toolbar.addAction(self.exit_button)
+        self.exit_button.triggered.connect(self.close)
         
     def add_images(self):
         self.leveldiagram = QLabel()
@@ -91,10 +96,6 @@ class UI(QMainWindow):
     def add_checkboxes(self):
         self.doppler = QCheckBox("Include Doppler Broadening?")
         self.transit = QCheckBox ("Include Transit Time Broadening?")
-        vel_params = ["T", "alpha"]
-        for i in vel_params:
-            self.doppler.toggled.connect(self.boxes[i].setEnabled)
-        self.transit.toggled.connect(self.boxes["T"].setEnabled)
         self.leftLayout.addWidget(self.doppler)
         self.leftLayout.addWidget(self.transit)
         
@@ -118,9 +119,9 @@ class UI(QMainWindow):
                   "Oven Temperature (K)" : (12, 0), 
                   "Atomic Beam Divergence Angle (Rad)" : (13, 0),
                   "Minimum Detuning (Hz)" : (14, 0),
-                  "Max Probe Detuining" : (15, 0),
+                  "Maximum Detunung (Hz)" : (15, 0),
                   "Number of Plotted Points" : (16, 0),
-                  "Coupling Laser Detuning" : (17, 0)}
+                  "Coupling Laser Detuning (Hz)" : (17, 0)}
         
         boxes = {"pp" : (0, 1), 
                  "cp" : (1, 1), 
@@ -149,15 +150,10 @@ class UI(QMainWindow):
             self.boxes[text] = QLineEdit()
             inputs_layout.addWidget(self.boxes[text], pos[0], pos[1])
         
-        vel_params = ["T", "alpha"]
         laser_params = ["Ip", "Ic", "omega_p", "omega_c"]
-        for i in vel_params:
-            self.boxes[i].setDisabled(True)
         for i in laser_params:
             self.boxes[i].setReadOnly(True)
-            
-        
-            
+
         self.leftLayout.addLayout(inputs_layout)
 
     def get_text(self, parameter):
@@ -224,13 +220,16 @@ class UI(QMainWindow):
         	tt = "N"
         
         if self.system_choice.currentIndex() == 0:
-            trans_plot(vals["delta_c"], vals["omega_p"], vals["omega_c"], spontaneous_32_413, spontaneous_21_413, 
+            dlist, tlist = trans_plot(vals["delta_c"], vals["omega_p"], vals["omega_c"], spontaneous_32_413, spontaneous_21_413, 
                        vals["lwp"], vals["lwc"], vals["dmin"], vals["dmax"], vals["steps"], gauss, kp_413, kc_413, 
                        vals["density"], d12_413, vals["sl"], vals["T"], vals["alpha"], vals["pd"], vals["cd"], tt)
+            self.save_dialog()
+            
         if self.system_choice.currentIndex() == 1:
-            trans_plot(vals["delta_c"], vals["omega_p"], vals["omega_c"], spontaneous_32_318, spontaneous_21_318, 
+            dlist, tlist = trans_plot(vals["delta_c"], vals["omega_p"], vals["omega_c"], spontaneous_32_318, spontaneous_21_318, 
                        vals["lwp"], vals["lwc"], vals["dmin"], vals["dmax"], vals["steps"], gauss, kp_318, kc_318, 
                        vals["density"], d12_318, vals["sl"], vals["T"], vals["alpha"], vals["pd"], vals["cd"], tt)
+            self.save_dialog()
         
     def population(self):
         vals = self.get_params()
@@ -281,14 +280,16 @@ class UI(QMainWindow):
         self.showdialog()
         
         if self.system_choice.currentIndex() == 0:
-            pop_plot(self.state_number, vals["delta_c"], vals["omega_p"], vals["omega_c"], spontaneous_32_413, spontaneous_21_413, 
+            dlist, plist = pop_plot(self.state_number, vals["delta_c"], vals["omega_p"], vals["omega_c"], spontaneous_32_413, spontaneous_21_413, 
                    vals["lwp"], vals["lwc"], vals["dmin"], vals["dmax"], vals["steps"], gauss, 
                    vals["T"], kp_413, kc_413, vals["alpha"], vals["pd"], vals["cd"], tt)
+            self.save_dialog()
             
         if self.system_choice.currentIndex() == 1:
-            pop_plot(self.state_number, vals["delta_c"], vals["omega_p"], vals["omega_c"], spontaneous_32_318, spontaneous_21_318, 
+            dlist, plist = pop_plot(self.state_number, vals["delta_c"], vals["omega_p"], vals["omega_c"], spontaneous_32_318, spontaneous_21_318, 
                    vals["lwp"], vals["lwc"], vals["dmin"], vals["dmax"], vals["steps"], gauss, 
                    vals["T"], kp_318, kc_318, vals["alpha"], vals["pd"], vals["cd"], tt)
+            self.save_dialog()
     
     def load_csv(self):
         dlg = QFileDialog()
@@ -305,27 +306,23 @@ class UI(QMainWindow):
             dlg.close()
             return
         
-        reader = csv.reader(open(f"{self.filename}", "rt"))
-        for rows in reader:
-            param = rows[0]
-            val = rows[1]
-            self.set_text(param, val)
+        with open(f"{self.filename}", "rt") as file: 
+            reader = csv.reader(file, delimiter=',')
+            for rows in reader:
+                param = rows[0]
+                val = rows[1]
+                self.set_text(param, val)
             
     def save_csv(self):
         dlg = QFileDialog()
-        selected = dlg.exec()
-        if selected:
-            self.filename = dlg.selectedFiles()[0]
-            dlg.close()
-        else:
-            dlg.close()
-            return
+        self.filename = dlg.getSaveFileName(self, 'Save File')[0]
         if self.filename == "":
             dlg.close()
             return
-        write = csv.writer(open(f"{self.filename}", "w"), delimiter=',')
-        for param, val in self.get_params().items():
-            write.writerow([param, val])                        
+        with open(f"{self.filename}", "w") as file:    
+            write = csv.writer(file, delimiter=',')    
+            for param, val in self.get_params().items():
+                write.writerow([param, val])                        
         
     def grey(self, i):
         if i == 0:
@@ -383,6 +380,10 @@ class UI(QMainWindow):
             self.state_number = "Rydberg"
         self.d.close()
         
+    def save_dialog(self):
+        box = QMessageBox.question(self, 'Save', 'Do you want to save data as a .csv?')
+        
+        
 def main():        
     app = QApplication(sys.argv)
     window = UI()
@@ -392,3 +393,4 @@ def main():
 if __name__ == "__main__":
     set_start_method("spawn")
     main()
+    
