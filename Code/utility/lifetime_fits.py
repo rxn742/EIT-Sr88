@@ -12,8 +12,6 @@ from scipy.optimize import curve_fit
 from scipy.constants import hbar, e, epsilon_0,c, m_e
 from sys import path
 path.insert(0, "../GUI")
-from vals_413 import d12_413, d23_413
-from vals_318 import d12_318, d23_318
 
 def nstar3(x, defect):
     return (x-defect)**3
@@ -26,24 +24,32 @@ def f(x, a, b):
     
 def state_1S0(n):
     defect = 3.269
-    fit = curve_fit(f, nstar**3, t, sigma=t_err)
+    t = np.array([1328.94, 1460.86, 1597.55, 1738.93, 
+        1884.92, 2035.38, 2190.29, 2349.51, 2513.10, 2680.84, 
+        2852.68, 3028.83, 3208.81, 3392.94, 3580.90, 3772.75,
+        3968.47, 4168.15, 4371.61, 4578.51, 4781.21])
+    nstar = np.arange(20, 41)-defect
+    fit = curve_fit(f, nstar**3, t)
     t_n = fit[0][0]*(n-defect)**3 + fit[0][1]
-    return f"{t_n:.2e}"
+    return t_n/1e9
 
 def state_1D2(n):
     defect = 2.381
+    t = np.array([24900, 59000])
+    t_err = np.array([500, 3000])
+    nstar = np.array([56-defect, 75-defect])
     fit = curve_fit(f, nstar**3, t, sigma=t_err)
     t_n = fit[0][0]*(n-defect)**3 + fit[0][1]
-    return f"{t_n:.2e}"
+    return t_n/1e9
 
-def state_3S0(n):
+def state_3S1(n):
     defect = 3.371
     t = np.array([1.83, 2.37, 2.73, 3.02, 3.36, 7.5])
     t_err = np.array([0.2, 0.33, 0.49, 0.54, 0.71, 4.40])
     nstar = np.array([15.631, 16.632, 17.633, 18.635, 19.636, 31.655])
     fit = curve_fit(f, nstar**3, t, sigma=t_err)
     t_n = fit[0][0]*(n-defect)**3 + fit[0][1]
-    return f"{t_n:.2f} micro seconds"
+    return t_n/1e6
 
 def state_3D3(n):
     defect = 2.630
@@ -52,7 +58,7 @@ def state_3D3(n):
     nstar = np.array([20.586, 21.559, 22.536, 23.521, 24.510, 25.499])
     fit = curve_fit(f, nstar**3, t, sigma=t_err)
     t_n = fit[0][0]*(n-defect)**3 + fit[0][1]
-    return f"{t_n:.2f} micro seconds"
+    return t_n/1e6
 
 #fig = plt.figure()
 #ax = fig.add_subplot(111)

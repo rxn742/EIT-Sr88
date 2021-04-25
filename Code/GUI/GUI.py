@@ -8,15 +8,16 @@ Created on Wed Feb 24 15:00:06 2021
 from multiprocessing import set_start_method
 import csv
 import sys
+import numpy as np
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from backend import trans_plot, pop_plot
-from vals_413 import d12_413, d23_413, spontaneous_21_413, spontaneous_32_413, kp_413, kc_413, \
+from backend import tcalc, pop_calc, FWHM, contrast
+from vals_413 import d12_413, func_d23_413, func_spon_413, spontaneous_21_413, kp_413, kc_413, \
                         func_Ic_413, func_Ip_413, func_omega_c_413, func_omega_p_413
-from vals_318 import d12_318, d23_318, spontaneous_21_318, spontaneous_32_318, kp_318, kc_318, \
+from vals_318 import d12_318, func_d23_318, kp_318, kc_318, func_spon_318, spontaneous_21_318,\
                         func_Ic_318, func_Ip_318, func_omega_c_318, func_omega_p_318
-import time
+import matplotlib.pyplot as plt
 
 
 class UI(QMainWindow):
@@ -25,7 +26,7 @@ class UI(QMainWindow):
         super(UI, self).__init__(*args, **kwargs)
         self.setWindowTitle("Sr88 3 Level System Simulator")
         self.screen = QDesktopWidget().screenGeometry(-1)
-        #self.setFixedSize(int(self.screen.height()*0.9), self.screen.height()-100)
+        self.setFixedSize(int(self.screen.height()*0.9), self.screen.height()-100)
         self.overallLayout = QHBoxLayout()
         self.leftLayout = QVBoxLayout()
         self.rightLayout = QVBoxLayout()
@@ -39,7 +40,7 @@ class UI(QMainWindow):
         self.add_dropdowns()
         self.add_inputs()
         self.add_checkboxes()
-        self.add_images()
+        #self.add_images()
     
     def add_toolbar(self):
         self.toolbar = QToolBar()
@@ -83,7 +84,7 @@ class UI(QMainWindow):
     
     def add_dropdowns(self):
         self.system_choice = QComboBox()
-        self.system_choice.addItems(["Sr88 Singlet Rydberg", "Sr88 Triplet Rydberg"])
+        self.system_choice.addItems(["Sr88 1D2 Series", "Sr88 3D3 Series"])
         self.system_choice.setCurrentIndex(0)
         self.leftLayout.addWidget(self.system_choice)
         self.input_type = QComboBox()
@@ -104,43 +105,45 @@ class UI(QMainWindow):
         self.boxes = {}
         inputs_layout = QGridLayout()
         
-        labels = {"Probe Laser Power (W)" : (0, 0), 
-                  "Coupling Laser Power (W)" : (1, 0),
-                  "Probe Laser Diameter (m)" : (2, 0),
-                  "Coupling Laser Diameter (m)" : (3, 0),
-                  "Probe Laser Intensity (W/m^2)" : (4, 0), 
-                  "Coupling Laser Intensity (W/m^2)" : (5, 0), 
-                  "Probe Rabi Frequency (Hz)" : (6, 0), 
-                  "Coupling Rabi Frequency (Hz)" : (7, 0), 
-                  "Probe Laser Linewidth (Hz)" : (8, 0), 
-                  "Coupling Laser Linewidth (Hz)" : (9, 0),
-                  "Atomic Density (m^-3)" : (10, 0),
-                  "Atomic Beam Width (m)" : (11, 0), 
-                  "Oven Temperature (K)" : (12, 0), 
-                  "Atomic Beam Divergence Angle (Rad)" : (13, 0),
-                  "Minimum Detuning (Hz)" : (14, 0),
-                  "Maximum Detunung (Hz)" : (15, 0),
-                  "Number of Plotted Points" : (16, 0),
-                  "Coupling Laser Detuning (Hz)" : (17, 0)}
+        labels = {"Rydberg State n level" : (0, 0),
+                  "Probe Laser Power (W)" : (1, 0), 
+                  "Coupling Laser Power (W)" : (2, 0),
+                  "Probe Laser Diameter (m)" : (3, 0),
+                  "Coupling Laser Diameter (m)" : (4, 0),
+                  "Probe Laser Intensity (W/m^2)" : (5, 0), 
+                  "Coupling Laser Intensity (W/m^2)" : (6, 0), 
+                  "Probe Rabi Frequency (Hz)" : (7, 0), 
+                  "Coupling Rabi Frequency (Hz)" : (8, 0), 
+                  "Probe Laser Linewidth (Hz)" : (9, 0), 
+                  "Coupling Laser Linewidth (Hz)" : (10, 0),
+                  "Atomic Density (m^-3)" : (11, 0),
+                  "Atomic Beam Width (m)" : (12, 0), 
+                  "Oven Temperature (K)" : (13, 0), 
+                  "Atomic Beam Divergence Angle (Rad)" : (14, 0),
+                  "Minimum Detuning (Hz)" : (15, 0),
+                  "Maximum Detunung (Hz)" : (16, 0),
+                  "Number of Plotted Points" : (17, 0),
+                  "Coupling Laser Detuning (Hz)" : (18, 0)}
         
-        boxes = {"pp" : (0, 1), 
-                 "cp" : (1, 1), 
-                 "pd" : (2, 1),
-                 "cd" : (3, 1),
-                 "Ip" : (4, 1), 
-                 "Ic" : (5, 1), 
-                 "omega_p" : (6, 1), 
-                 "omega_c" : (7, 1),
-                 "lwp" : (8, 1),
-                 "lwc" : (9, 1),
-                 "density" : (10, 1), 
-                 "sl" : (11, 1), 
-                 "T" : (12, 1), 
-                 "alpha" : (13, 1),
-                 "dmin" : (14, 1),
-                 "dmax" : (15, 1),
-                 "steps" : (16, 1),
-                 "delta_c" : (17, 1)}
+        boxes = {"n" : (0, 1),
+                 "pp" : (1, 1), 
+                 "cp" : (2, 1), 
+                 "pd" : (3, 1),
+                 "cd" : (4, 1),
+                 "Ip" : (5, 1), 
+                 "Ic" : (6, 1), 
+                 "omega_p" : (7, 1), 
+                 "omega_c" : (8, 1),
+                 "lwp" : (9, 1),
+                 "lwc" : (10, 1),
+                 "density" : (11, 1), 
+                 "sl" : (12, 1), 
+                 "T" : (13, 1), 
+                 "alpha" : (14, 1),
+                 "dmin" : (15, 1),
+                 "dmax" : (16, 1),
+                 "steps" : (17, 1),
+                 "delta_c" : (18, 1)}
         
         for text, pos in labels.items():
             self.labels[text] = QLabel(text)
@@ -184,26 +187,41 @@ class UI(QMainWindow):
         vals["dmin"] = int(vals["dmin"])
         vals["dmax"] = int(vals["dmax"])
         vals["steps"] = int(vals["steps"])
+        vals["n"] = int(vals["n"])
         
         if self.system_choice.currentIndex() == 0:
+            d23_413 = func_d23_413(vals["n"], "1D2")
             if self.input_type.currentIndex() == 0:
+                if d23_413 == 0:
+                    self.dme()
+                    return
                 vals["Ip"] = func_Ip_413(vals["pp"], vals["pd"])
                 vals["Ic"] = func_Ic_413(vals["cp"], vals["cd"])
                 vals["omega_p"] = func_omega_p_413(vals["Ip"])
-                vals["omega_c"] = func_omega_c_413(vals["Ic"])
+                vals["omega_c"] = func_omega_c_413(vals["Ic"], d23_413)
             if self.input_type.currentIndex() == 1:
+                if d23_413 == 0:
+                    self.dme()
+                    return
                 vals["omega_p"] = func_omega_p_413(vals["Ip"])
-                vals["omega_c"] = func_omega_c_413(vals["Ic"])
+                vals["omega_c"] = func_omega_c_413(vals["Ic"], d23_413)
         
         if self.system_choice.currentIndex() == 1:
+            d23_318 = func_d23_318(vals["n"], "3D3")
             if self.input_type.currentIndex() == 0:
+                if d23_318 == 0:
+                    self.dme()
+                    return
                 vals["Ip"] = func_Ip_318(vals["pp"], vals["pd"])
                 vals["Ic"] = func_Ic_318(vals["cp"], vals["cd"])
                 vals["omega_p"] = func_omega_p_318(vals["Ip"])
-                vals["omega_c"] = func_omega_c_318(vals["Ic"])
+                vals["omega_c"] = func_omega_c_318(vals["Ic"], d23_318)
             if self.input_type.currentIndex() == 1:
+                if d23_318 == 0:
+                    self.dme()
+                    return
                 vals["omega_p"] = func_omega_p_318(vals["Ip"])
-                vals["omega_c"] = func_omega_c_318(vals["Ic"])
+                vals["omega_c"] = func_omega_c_318(vals["Ic"], d23_318)
         
         if self.doppler.isChecked():
             gauss = "Y"
@@ -220,16 +238,18 @@ class UI(QMainWindow):
         	tt = "N"
         
         if self.system_choice.currentIndex() == 0:
-            dlist, tlist = trans_plot(vals["delta_c"], vals["omega_p"], vals["omega_c"], spontaneous_32_413, spontaneous_21_413, 
+            spontaneous_32_413 = func_spon_413(vals["n"], "1D2")
+            dlist, tlist = tcalc(vals["delta_c"], vals["omega_p"], vals["omega_c"], spontaneous_32_413, spontaneous_21_413, 
                        vals["lwp"], vals["lwc"], vals["dmin"], vals["dmax"], vals["steps"], gauss, kp_413, kc_413, 
                        vals["density"], d12_413, vals["sl"], vals["T"], vals["alpha"], vals["pd"], vals["cd"], tt)
-            self.save_dialog()
+            self.t_plotter(dlist, tlist)
             
         if self.system_choice.currentIndex() == 1:
-            dlist, tlist = trans_plot(vals["delta_c"], vals["omega_p"], vals["omega_c"], spontaneous_32_318, spontaneous_21_318, 
+            spontaneous_32_318 = func_spon_318(vals["n"], "3D3")
+            dlist, tlist = tcalc(vals["delta_c"], vals["omega_p"], vals["omega_c"], spontaneous_32_318, spontaneous_21_318, 
                        vals["lwp"], vals["lwc"], vals["dmin"], vals["dmax"], vals["steps"], gauss, kp_318, kc_318, 
                        vals["density"], d12_318, vals["sl"], vals["T"], vals["alpha"], vals["pd"], vals["cd"], tt)
-            self.save_dialog()
+            self.t_plotter(dlist, tlist)
         
     def population(self):
         vals = self.get_params()
@@ -241,6 +261,7 @@ class UI(QMainWindow):
         vals["dmin"] = int(vals["dmin"])
         vals["dmax"] = int(vals["dmax"])
         vals["steps"] = int(vals["steps"])
+        vals["n"] = int(vals["n"])
         
         if self.system_choice.currentIndex() == 0:
             if self.input_type.currentIndex() == 0:
@@ -280,17 +301,19 @@ class UI(QMainWindow):
         self.showdialog()
         
         if self.system_choice.currentIndex() == 0:
-            dlist, plist = pop_plot(self.state_number, vals["delta_c"], vals["omega_p"], vals["omega_c"], spontaneous_32_413, spontaneous_21_413, 
-                   vals["lwp"], vals["lwc"], vals["dmin"], vals["dmax"], vals["steps"], gauss, 
+            spontaneous_32_413 = func_spon_413(vals["n"], "1D2")
+            dlist, plist = pop_calc(vals["delta_c"], vals["omega_p"], vals["omega_c"], spontaneous_32_413, spontaneous_21_413, 
+                   vals["lwp"], vals["lwc"], vals["dmin"], vals["dmax"], vals["steps"], self.state_index, gauss, 
                    vals["T"], kp_413, kc_413, vals["alpha"], vals["pd"], vals["cd"], tt)
-            self.save_dialog()
-            
+            self.p_plotter(dlist, plist)           
+        
         if self.system_choice.currentIndex() == 1:
-            dlist, plist = pop_plot(self.state_number, vals["delta_c"], vals["omega_p"], vals["omega_c"], spontaneous_32_318, spontaneous_21_318, 
-                   vals["lwp"], vals["lwc"], vals["dmin"], vals["dmax"], vals["steps"], gauss, 
+            spontaneous_32_318 = func_spon_318(vals["n"], "3D3")
+            dlist, plist = pop_calc(vals["delta_c"], vals["omega_p"], vals["omega_c"], spontaneous_32_318, spontaneous_21_318, 
+                   vals["lwp"], vals["lwc"], vals["dmin"], vals["dmax"], vals["steps"], self.state_index, gauss, 
                    vals["T"], kp_318, kc_318, vals["alpha"], vals["pd"], vals["cd"], tt)
-            self.save_dialog()
-    
+            self.p_plotter(dlist, plist)
+            
     def load_csv(self):
         dlg = QFileDialog()
         dlg.setFileMode(QFileDialog.AnyFile)
@@ -319,6 +342,8 @@ class UI(QMainWindow):
         if self.filename == "":
             dlg.close()
             return
+        if not self.filename.endswith('.csv'):
+            self.filename += '.csv'
         with open(f"{self.filename}", "w") as file:    
             write = csv.writer(file, delimiter=',')    
             for param, val in self.get_params().items():
@@ -374,15 +399,91 @@ class UI(QMainWindow):
     def state(self):
         if self.dd.currentIndex() == 0:
             self.state_number = "Ground"
+            self.state_index = 0,0
         if self.dd.currentIndex() == 1:
             self.state_number = "Intermediate"
+            self.state_index = 1,1
         if self.dd.currentIndex() == 2:
             self.state_number = "Rydberg"
+            self.state_index = 2,2
         self.d.close()
         
-    def save_dialog(self):
+    def save_dialog(self, event):
         box = QMessageBox.question(self, 'Save', 'Do you want to save data as a .csv?')
+        if box == QMessageBox.Yes:
+            dlg = QFileDialog()
+            self.filename = dlg.getSaveFileName(self, 'Save File')[0]
+            if self.filename == "":
+                dlg.close()
+                return
+            if not self.filename.endswith('.csv'):
+                self.filename += '.csv'
+            with open(f"{self.filename}", "w") as file:    
+                write = csv.writer(file, delimiter=',')    
+                if self.typ == "t":
+                    write.writerow(["Probe Detununing", "Probe Transmission"])
+                if self.typ == "p":
+                    write.writerow(["Probe Detununing", f"{self.state_number} Population"])
+                for i in range(len(self.dlist)):
+                    write.writerow([self.dlist[i], self.flist[i]])
+                    
+    
+    def t_plotter(self, dlist, tlist):
+        """ Plotting"""
+        self.dlist = dlist
+        self.flist = tlist
+        self.typ = "t"
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        """ Geometric library to calculate linewidth of EIT peak (FWHM) """
+        try:
+            pw = FWHM(dlist, tlist)
+            ct = contrast(dlist, tlist)
+            if pw < 2*np.pi*1e6:
+                ax.text(0.5, 0.97, f"EIT peak FWHM = 2$\pi$ x {pw/(1e3*2*np.pi):.2f} $kHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
+            else:
+                ax.text(0.5, 0.97, f"EIT peak FWHM = 2$\pi$ x {pw/(1e6*2*np.pi):.2f} $MHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
+            ax.text(0.5, 0.93, f"EIT Contrast = {ct:.2f}", transform=ax.transAxes, fontsize=10, va='center', ha='center')        
+        except:
+            pw = FWHM(dlist, -tlist)
+            if pw < 2*np.pi*1e6:
+                ax.text(0.5, 0.97, f"Background FWHM = 2$\pi$ x {pw/(1e3*2*np.pi):.2f} $kHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
+            else:
+                ax.text(0.5, 0.97, f"Background FWHM = 2$\pi$ x {pw/(1e6*2*np.pi):.2f} $MHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')       
         
+        plt.title(r"Probe transmission against probe beam detuning")
+        if dlist[-1]-dlist[0] >= 1e6:
+            ax.plot(dlist/(1e6), tlist, color="orange")
+            ax.set_xlabel(r"$\Delta_p$ / MHz")
+        else:
+            ax.plot(dlist/(1e3), tlist, color="orange")
+            ax.set_xlabel(r"$\Delta_p$ / kHz")
+        ax.set_ylabel(r"Probe Transmission")
+        ax.legend()
+        plt.show()
+        fig.canvas.mpl_connect('close_event', self.save_dialog)
+        
+    def p_plotter(self, dlist, plist):
+        self.dlist = dlist
+        self.flist = plist
+        self.typ = "p"
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        plt.title(f"{self.state_number} population")
+        if dlist[-1] - dlist[0] >= 1e6:
+            ax.plot(dlist/(1e6), plist, color="orange")
+            ax.set_xlabel(r"$\Delta_p$ / MHz")
+        else:
+            ax.plot(dlist/(1e3), plist, color="orange")
+            ax.set_xlabel(r"$\Delta_p$ / kHz")
+        ax.set_ylabel(f"{self.state_number} state popultaion")
+        ax.legend()
+        plt.show()
+        fig.canvas.mpl_connect('close_event', self.save_dialog)
+        
+    def dme(self):
+        QMessageBox.about(self, "Dipole Matrix Element", 
+        "Dipole matrix element not found! \n \nConsult readme for valid n levels")
         
 def main():        
     app = QApplication(sys.argv)
