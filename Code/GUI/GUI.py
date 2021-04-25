@@ -26,7 +26,7 @@ class UI(QMainWindow):
         super(UI, self).__init__(*args, **kwargs)
         self.setWindowTitle("Sr88 3 Level System Simulator")
         self.screen = QDesktopWidget().screenGeometry(-1)
-        self.setFixedSize(int(self.screen.height()*0.9), self.screen.height()-100)
+        self.setFixedSize(640, 700)
         self.overallLayout = QHBoxLayout()
         self.leftLayout = QVBoxLayout()
         self.rightLayout = QVBoxLayout()
@@ -74,8 +74,7 @@ class UI(QMainWindow):
         self.leveldiagram = QLabel()
         self.levelpixmap = QPixmap('imgs/orig.png')
         self.leveldiagram.setPixmap(self.levelpixmap)
-        self.leveldiagram.resize(int(self.levelpixmap.width()*(self.screen.height()/1080)), int(self.levelpixmap.height()*(self.screen.width()/1920)))
-        self.rightLayout.addWidget(self.leveldiagram, alignment=Qt.AlignCenter)
+        self.rightLayout.addWidget(self.leveldiagram, alignment=Qt.AlignTop)
         print("here")
     
     def add_dropdowns(self):
