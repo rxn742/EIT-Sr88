@@ -291,7 +291,7 @@ def pop_calc(delta_c, omega_p, omega_c, spontaneous_32,
                         lw_coupling, temperature, probe_diameter, 
                         coupling_diameter, tt)
         plist = parallel_progbar(population, iters, starmap=True)
-        plist = np.array(np.abs([x[state_index] for x in plist]))
+        plist = np.array([x[state_index] for x in plist])
     return dlist, plist
 
 def pop_plot(state, delta_c, omega_p, omega_c, spontaneous_32, 
@@ -458,7 +458,47 @@ def trans_plot(delta_c, omega_p, omega_c, spontaneous_32,
                          spontaneous_21, lw_probe, lw_coupling, dmin, dmax, 
                          steps, gauss, kp, kc, density, dig, sl, temperature, beamdiv, 
                          probe_diameter, coupling_diameter, tt)
-
+    """ Plotting"""
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    """ Geometric library to calculate linewidth of EIT peak (FWHM) """
+    try:
+        pw = FWHM(dlist, tlist)
+        ct = contrast(dlist, tlist)
+        if pw < 2*np.pi*1e6:
+            ax.text(0.5, 0.97, f"EIT peak FWHM = 2$\pi$ x {pw/(1e3*2*np.pi):.2f} $kHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
+        else:
+            ax.text(0.5, 0.97, f"EIT peak FWHM = 2$\pi$ x {pw/(1e6*2*np.pi):.2f} $MHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
+        ax.text(0.5, 0.93, f"EIT Contrast = {ct:.2f}", transform=ax.transAxes, fontsize=10, va='center', ha='center')        
+    except:
+        pw = FWHM(dlist, -tlist)
+        if pw < 2*np.pi*1e6:
+            ax.text(0.5, 0.97, f"Background FWHM = 2$\pi$ x {pw/(1e3*2*np.pi):.2f} $kHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')
+        else:
+            ax.text(0.5, 0.97, f"Background FWHM = 2$\pi$ x {pw/(1e6*2*np.pi):.2f} $MHz$", transform=ax.transAxes, fontsize=10, va='center', ha='center')       
+    
+    plt.title(r"Probe transmission against probe beam detuning")
+    if dmax-dmin >= 1e6:
+        ax.plot(dlist/(1e6), tlist, color="orange", label="$\Omega_c=$" f"{omega_c:.2e} $Hz$"\
+                "\n" "$\Omega_p=$" f"{omega_p:.2e} $Hz$" "\n" \
+                "$\Gamma_{c}$" f"= {spontaneous_32/(2*np.pi):.2e} $Hz$" "\n" \
+                "$\Gamma_{p}$" f"= {spontaneous_21/(2*np.pi):.2e} $Hz$" "\n"\
+                "$\Delta_c =$" f"{delta_c/1e6:.2f} $Hz$" "\n" \
+                f"$\gamma_p$ = {lw_probe:.2e} $Hz$" "\n" 
+                f"$\gamma_c$ = {lw_coupling:.2e} $Hz$")
+        ax.set_xlabel(r"$\Delta_p$ / MHz")
+    else:
+        ax.plot(dlist/(1e3), tlist, color="orange", label="$\Omega_c=$" f"{omega_c:.2e} $Hz$"\
+                "\n" "$\Omega_p=$" f"{omega_p:.2e} $Hz$" "\n" \
+                "$\Gamma_{c}$" f"= {spontaneous_32/(2*np.pi):.2e} $Hz$" "\n" \
+                "$\Gamma_{p}$" f"= {spontaneous_21/(2*np.pi):.2e} $Hz$" "\n"\
+                "$\Delta_c =$" f"{delta_c/1e6:.2f} $Hz$" "\n" \
+                f"$\gamma_p$ = {lw_probe:.2e} $Hz$" "\n" 
+                f"$\gamma_c$ = {lw_coupling:.2e} $Hz$")
+        ax.set_xlabel(r"$\Delta_p$ / kHz")
+    ax.set_ylabel(r"Probe Transmission")
+    ax.legend()
+    plt.show()
     
 def FWHM(dlist, tlist):
     """
