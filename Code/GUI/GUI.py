@@ -26,7 +26,7 @@ class UI(QMainWindow):
         super(UI, self).__init__(*args, **kwargs)
         self.setWindowTitle("Sr88 3 Level System Simulator")
         self.screen = QDesktopWidget().screenGeometry(-1)
-        self.setFixedSize(int(self.screen.height()*0.9), self.screen.height()-100)
+        self.setFixedSize(int(self.screen.height()*0.8), self.screen.height()-100)
         self.overallLayout = QHBoxLayout()
         self.leftLayout = QVBoxLayout()
         self.rightLayout = QVBoxLayout()
@@ -40,7 +40,7 @@ class UI(QMainWindow):
         self.add_dropdowns()
         self.add_inputs()
         self.add_checkboxes()
-        #self.add_images()
+        self.add_images()
     
     def add_toolbar(self):
         self.toolbar = QToolBar()
@@ -72,15 +72,10 @@ class UI(QMainWindow):
         
     def add_images(self):
         self.leveldiagram = QLabel()
-        self.levelpixmap = QPixmap('imgs/3ls.PNG')
+        self.levelpixmap = QPixmap('imgs/orig.PNG')
         self.leveldiagram.setPixmap(self.levelpixmap)
         self.leveldiagram.resize(self.levelpixmap.width(), self.levelpixmap.height())
         self.rightLayout.addWidget(self.leveldiagram, alignment=Qt.AlignCenter)
-        self.master_eq = QLabel()
-        self.master_pix = QPixmap('imgs/master2.PNG')
-        self.master_eq.setPixmap(self.master_pix)
-        self.master_eq.resize(self.master_pix.width(), self.master_pix.height())
-        self.rightLayout.addWidget(self.master_eq, alignment=Qt.AlignCenter) 
     
     def add_dropdowns(self):
         self.system_choice = QComboBox()
