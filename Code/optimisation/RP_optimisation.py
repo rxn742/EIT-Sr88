@@ -1,10 +1,9 @@
 import numpy as np
-from sys import path
-path.insert(0, "../GUI")
 import ray
 from scipy.signal import find_peaks
 from backend_ray import pop_calc, tcalc, FWHM, contrast
 from copy import deepcopy
+import time
 
 class Error(Exception):
     """
@@ -69,10 +68,13 @@ class optimise:
                                     dic["probe_diameter"], dic["coupling_diameter"], dic["tt"])
         
         try:
-        	lw = FWHM(dlist, tlist)
+            lw = FWHM(dlist, tlist)
         except:
-        	lw = 0
-        ct = contrast(dlist, tlist)
+            lw = 0
+        try:
+            ct = contrast(dlist, tlist)
+        except:
+            ct = 0
         return lw, ct
                         
     def Rydberg_pop(self, **kwargs):
@@ -230,10 +232,9 @@ class optimise:
         for i in keys:
             if i not in kwargs.keys():
                 raise Error("All parameters require a starting value")
-        count = 1
         self.x1 = kwargs
         if self.cm_max(**self.x1) and self.cm_constraints(**self.x1):
-            pass
+            count = 1
         else:
             raise Error("Original point does not meet the contstraints")
         self.xc = {"1":self.x1}
@@ -309,18 +310,18 @@ class optimise:
 
     def cm_max(self, **kwargs):
         self.maximums = {}
-        self.maximums["omega_p"] = 30e6
-        self.maximums["omega_c"] = 30e6
+        self.maximums["omega_p"] = 100e6
+        self.maximums["omega_c"] = 100e6
         if all(self.maximums[j] > kwargs[j] for j in kwargs):
             return True
         else:
             return False
     
     def cm_constraints(self, **kwargs):
-        self.linewidth = 3e6
+        self.linewidth = 2*np.pi*5e6
         self.contrast = 0.01
-        #print(self.EIT(**kwargs))
-        if self.EIT(**kwargs)[0] < self.linewidth and self.EIT(**kwargs)[1] > self.contrast and kwargs["omega_c"] > 2*kwargs["omega_p"]:
+        #print(self.EIT(**kwargs)[0]/(2*np.pi*1e6))
+        if self.EIT(**kwargs)[0] < self.linewidth and self.EIT(**kwargs)[1] > self.contrast and kwargs["omega_c"] >= kwargs["omega_p"]:
             return True
         else:
             return False
@@ -329,18 +330,20 @@ class optimise:
         
 
 if __name__ == "__main__":
-    ray.shutdown()
+    #ray.shutdown()
     try:
         ray.init(address='auto', _redis_password='5241590000000000')
     except:
         ray.init()
+    start = time.time()
     #result = bisection(1e6, 40e6, delta_c=0, omega_p=10e6, lw_probe=1e5, lw_coupling=1e5, dmin=-100e6, dmax=100e6, steps=1000, gauss="N", temperature=623.15, beamdiv=38e-3, probe_diameter=1, coupling_diameter=1, tt="N")
     #print(result)
     #ray.shutdown()
-    op = optimise("singlet", "Rydberg", "omega_c", delta_c=0, omega_p=30e6, lw_probe=1e5, lw_coupling=1e5, dmin=-50e6, dmax=50e6, steps=100, gauss="N", temperature=623.15, beamdiv=38e-3, probe_diameter=1, coupling_diameter=1, tt="N", density=1e15, sl=3e-3)
+    op = optimise("singlet", "Rydberg", "omega_c", delta_c=0, omega_p=30e6, lw_probe=1e6, lw_coupling=1e6, dmin=-60e6, dmax=60e6, steps=100, gauss="Y", temperature=650, beamdiv=38e-3, probe_diameter=1, coupling_diameter=1, tt="N", density=1e15, sl=3e-3)
     #op.bisection1D(1e6, 30e6)
     #op.pattern_search(omega_c=15e6, omega_p=5e6)
-    op.cm_iter(omega_c=16e6, omega_p=5e6)
+    op.cm_iter(omega_c=20e6, omega_p=20e6)
+    print(f"time = {time.time()} - start")
 
 
 
