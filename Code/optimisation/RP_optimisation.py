@@ -305,7 +305,7 @@ class optimise:
         min_key = min(F, key=self.fns.get)
         xe = cplex.pop(min_key)
         fn_min = self.Rydberg_pop(**xe)
-        print(f'Rydberg population = {fn_min*100:.1f}% \nOmega_p = {xe["omega_p"]:.1e} Hz \nOmega_c = {xe["omega_c"]:.1e} Hz')
+        print(f'Rydberg population = {fn_min*100:.2f}% \nOmega_p = {xe["omega_p"]} Hz \nOmega_c = {xe["omega_c"]} Hz')
         return
 
     def cm_max(self, **kwargs):
@@ -339,11 +339,11 @@ if __name__ == "__main__":
     #result = bisection(1e6, 40e6, delta_c=0, omega_p=10e6, lw_probe=1e5, lw_coupling=1e5, dmin=-100e6, dmax=100e6, steps=1000, gauss="N", temperature=623.15, beamdiv=38e-3, probe_diameter=1, coupling_diameter=1, tt="N")
     #print(result)
     #ray.shutdown()
-    op = optimise("singlet", "Rydberg", "omega_c", delta_c=0, omega_p=30e6, lw_probe=1e6, lw_coupling=1e6, dmin=-60e6, dmax=60e6, steps=100, gauss="Y", temperature=650, beamdiv=38e-3, probe_diameter=1, coupling_diameter=1, tt="N", density=1e15, sl=3e-3)
+    op = optimise("singlet", "Rydberg", "omega_c", delta_c=0, omega_p=40e6, lw_probe=1e6, lw_coupling=1e6, dmin=-60e6, dmax=60e6, steps=100, gauss="Y", temperature=650, beamdiv=38e-3, probe_diameter=3e-3, coupling_diameter=0.36e-3, tt="Y", density=1e15, sl=3e-3)
     #op.bisection1D(1e6, 30e6)
     #op.pattern_search(omega_c=15e6, omega_p=5e6)
-    op.cm_iter(omega_c=20e6, omega_p=20e6)
-    print(f"time = {time.time()} - start")
+    op.cm_iter(omega_c=40e6, omega_p=40e6)
+    print(f"time = {time.time()-start}")
 
 
 
