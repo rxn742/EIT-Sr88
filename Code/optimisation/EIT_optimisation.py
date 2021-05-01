@@ -238,7 +238,7 @@ class optimise:
         else:
             raise Error("Original point does not meet the contstraints")
         self.xc = {"1":self.x1}
-        self.fns = {"1":-self.Rydberg_pop(**kwargs)}
+        self.fns = {"1":self.EIT(**kwargs)[0]}
         
         while count < 4:
             self.xi = {}
@@ -255,14 +255,14 @@ class optimise:
                         self.xi[j] = 1/2*(self.xi[j] + self.xc["1"][j])
                     
             self.xc[f"{count}"] = self.xi
-            self.fns[f"{count}"] = -self.Rydberg_pop(**self.xi)
+            self.fns[f"{count}"] = self.EIT(**self.xi)[0]
 
         return self.xc, self.fns
     
     def cm_iter(self, EIT="no", alpha=1, **kwargs):
         cplex, F = self.cm_init(EIT, **kwargs)
         std_dev = 1
-        while std_dev > 1e-5:
+        while std_dev > 1e-4:
             max_key = max(F, key=self.fns.get)
             xh = cplex.pop(max_key)
             fn_max = F.pop(max_key)
@@ -276,7 +276,7 @@ class optimise:
             while feasible == False:
                 if self.cm_max(**xr):
                     if self.cm_constraints(**xr):
-                        fn_reflect = -self.Rydberg_pop(**xr)
+                        fn_reflect = self.EIT(**xr)[0]
                         if fn_reflect < fn_max:
                             feasible = True
                             xh = xr
@@ -297,31 +297,35 @@ class optimise:
                             xr[j] = 1/2*(xo[j]+xr[j])
             
             std_dev = np.array([F[i] for i in F]).std()
-            #vals = list(cplex.values())
+            vals = list(cplex.values())
             fvals = list(F.values())
             print(f"Function = {fvals}")
+            print("\n")
+            print(f"vals = {vals}")
             print("\n")
         
         min_key = min(F, key=self.fns.get)
         xe = cplex.pop(min_key)
-        fn_min = self.Rydberg_pop(**xe)
+        fn_min = self.EIT(**xe)[0]
         print(f'Rydberg population = {fn_min*100:.2f}% \nOmega_p = {xe["omega_p"]} Hz \nOmega_c = {xe["omega_c"]} Hz')
         return [fn_min, xe["omega_p"], xe["omega_c"]]
 
     def cm_max(self, **kwargs):
         self.maximums = {}
-        self.maximums["omega_p"] = 60e6
-        self.maximums["omega_c"] = 60e6
-        if all(self.maximums[j] > kwargs[j] for j in kwargs):
+        self.minimums = {}
+        self.maximums["omega_p"] = 15e6
+        self.maximums["omega_c"] = 15e6
+        self.minimums["omega_p"] = 0
+        self.minimums["omega_c"] = 0
+        if all(self.maximums[j] > kwargs[j] for j in kwargs) and all(self.minimums[j] < kwargs[j] for j in kwargs):
             return True
         else:
             return False
     
     def cm_constraints(self, **kwargs):
-        self.linewidth = 2*np.pi*5e6
         self.contrast = 0.01
         #print(self.EIT(**kwargs)[0]/(2*np.pi*1e6))
-        if self.EIT(**kwargs)[0] < self.linewidth and self.EIT(**kwargs)[1] > self.contrast and kwargs["omega_c"] >= kwargs["omega_p"]:
+        if self.EIT(**kwargs)[1] > self.contrast and kwargs["omega_c"] >= kwargs["omega_p"]:
             return True
         else:
             return False
@@ -334,19 +338,19 @@ if __name__ == "__main__":
     try:
         ray.init(address='auto', _redis_password='5241590000000000')
     except:
-        #ray.init()
+        ray.init()
         pass
     start = time.time()
     #result = bisection(1e6, 40e6, delta_c=0, omega_p=10e6, lw_probe=1e5, lw_coupling=1e5, dmin=-100e6, dmax=100e6, steps=1000, gauss="N", temperature=623.15, beamdiv=38e-3, probe_diameter=1, coupling_diameter=1, tt="N")
     #print(result)
     #ray.shutdown()
-    op = optimise("singlet", "Rydberg", "omega_c", delta_c=0, omega_p=40e6, lw_probe=1e6, lw_coupling=1e6, dmin=-60e6, dmax=60e6, steps=100, gauss="Y", temperature=650, beamdiv=38e-3, probe_diameter=4e-3, coupling_diameter=0.396e-3, tt="Y", density=1e15, sl=3e-3)
+    op = optimise("singlet", "Rydberg", "omega_c", delta_c=0, omega_p=40e6, lw_probe=1e6, lw_coupling=1e6, dmin=-60e6, dmax=60e6, steps=100, gauss="Y", temperature=650, beamdiv=38e-3, probe_diameter=4e-3, coupling_diameter=1.69e-3, tt="Y", density=1e15, sl=3e-3)
     #op.bisection1D(1e6, 30e6)
     #op.pattern_search(omega_c=15e6, omega_p=5e6)
-    vals = op.cm_iter(omega_c=40e6, omega_p=40e6)
+    vals = op.cm_iter(omega_c=10e6, omega_p=1e6)
     time = {time.time()-start}
     print(time)
-    with open("5Mhz.txt", "a") as f:
+    with open("EIT.txt", "a") as f:
         for item in vals:
             f.write(str(item) + "\n")
 
